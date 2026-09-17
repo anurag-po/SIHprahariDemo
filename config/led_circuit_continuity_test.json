@@ -1,0 +1,150 @@
+{
+  "experiment_id": "led_circuit_continuity_test",
+  "display_name": "LED Circuit Continuity Test",
+  "expected_duration_seconds": 60,
+  "objects": [
+    "glove",
+    "breadboard",
+    "resistor",
+    "led",
+    "wire_red",
+    "wire_black",
+    "battery"
+  ],
+  "rois": {
+    "work_zone": [120, 140, 520, 420],
+    "battery_holder": [400, 260, 500, 360],
+    "component_tray": [50, 50, 200, 200]
+  },
+  "steps": [
+    {
+      "id": 1,
+      "name": "glove_up",
+      "requires_objects": ["glove"],
+      "event": "hands_gloved",
+      "voice_prompt": "Step 1: put on gloves.",
+      "severity": 0.3,
+      "irreversible": false,
+      "verification": {
+        "mode": "vision_only",
+        "signal": null
+      },
+      "expected_targets": ["work_zone"],
+      "confusable_targets": []
+    },
+    {
+      "id": 2,
+      "name": "place_breadboard",
+      "requires_objects": ["breadboard"],
+      "event": "object_in_roi:breadboard:work_zone",
+      "depends_on": [1],
+      "voice_prompt": "Step 2: place the breadboard in the work zone.",
+      "severity": 0.4,
+      "irreversible": false,
+      "verification": {
+        "mode": "vision_only",
+        "signal": null
+      },
+      "expected_targets": ["work_zone"],
+      "confusable_targets": ["battery_holder"]
+    },
+    {
+      "id": 3,
+      "name": "insert_resistor",
+      "requires_objects": ["resistor"],
+      "event": "object_stationary_in_roi:resistor:work_zone",
+      "depends_on": [2],
+      "voice_prompt": "Step 3: insert the resistor.",
+      "severity": 0.6,
+      "irreversible": false,
+      "verification": {
+        "mode": "vision_only",
+        "signal": null
+      },
+      "expected_targets": ["work_zone"],
+      "confusable_targets": ["battery_holder"]
+    },
+    {
+      "id": 4,
+      "name": "insert_led",
+      "requires_objects": ["led"],
+      "event": "object_stationary_in_roi:led:work_zone",
+      "depends_on": [3],
+      "voice_prompt": "Step 4: insert the LED.",
+      "severity": 0.7,
+      "irreversible": false,
+      "verification": {
+        "mode": "vision_only",
+        "signal": null
+      },
+      "expected_targets": ["work_zone"],
+      "confusable_targets": ["battery_holder"]
+    },
+    {
+      "id": 5,
+      "name": "connect_wire_positive",
+      "requires_objects": ["wire_red"],
+      "event": "object_spans_rois:wire_red:work_zone,battery_holder",
+      "depends_on": [4],
+      "voice_prompt": "Step 5: connect the red wire.",
+      "severity": 0.8,
+      "irreversible": false,
+      "verification": {
+        "mode": "vision_only",
+        "signal": null
+      },
+      "expected_targets": ["work_zone", "battery_holder"],
+      "confusable_targets": ["component_tray"]
+    },
+    {
+      "id": 6,
+      "name": "connect_wire_negative",
+      "requires_objects": ["wire_black"],
+      "event": "object_spans_rois:wire_black:work_zone,battery_holder",
+      "depends_on": [5],
+      "voice_prompt": "Step 6: connect the black wire.",
+      "severity": 0.8,
+      "irreversible": false,
+      "verification": {
+        "mode": "vision_only",
+        "signal": null
+      },
+      "expected_targets": ["work_zone", "battery_holder"],
+      "confusable_targets": ["component_tray"]
+    },
+    {
+      "id": 7,
+      "name": "seat_battery",
+      "requires_objects": ["battery"],
+      "event": "object_stationary_in_roi:battery:battery_holder",
+      "depends_on": [5, 6],
+      "voice_prompt": "Step 7: seat the battery.",
+      "severity": 0.9,
+      "irreversible": true,
+      "verification": {
+        "mode": "vision+brightness",
+        "signal": null,
+        "target_roi": "work_zone",
+        "brightness_delta_threshold": 25.0
+      },
+      "expected_targets": ["battery_holder"],
+      "confusable_targets": ["work_zone"]
+    },
+    {
+      "id": 8,
+      "name": "confirm_and_power_down",
+      "requires_objects": ["battery"],
+      "event": "dwell_then_object_removed:battery:battery_holder:3s",
+      "depends_on": [7],
+      "voice_prompt": "Step 8: confirm LED state, then remove the battery.",
+      "severity": 0.5,
+      "irreversible": false,
+      "verification": {
+        "mode": "vision_only",
+        "signal": null
+      },
+      "expected_targets": ["battery_holder"],
+      "confusable_targets": []
+    }
+  ]
+}

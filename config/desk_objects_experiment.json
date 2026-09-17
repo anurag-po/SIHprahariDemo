@@ -1,0 +1,134 @@
+{
+  "experiment_id": "desk_objects_experiment",
+  "display_name": "Everyday Desk Objects Protocol",
+  "expected_duration_seconds": 60,
+  "objects": [
+    "book",
+    "pen",
+    "mouse",
+    "bottle",
+    "cup",
+    "phone",
+    "laptop",
+    "hand"
+  ],
+  "rois": {
+    "staging_zone": [20, 40, 220, 220],
+    "log_zone": [100, 120, 540, 460],
+    "storage_zone": [420, 40, 620, 220]
+  },
+  "steps": [
+    {
+      "id": 1,
+      "name": "open_notebook",
+      "requires_objects": ["book"],
+      "event": "object_in_roi:book:log_zone|object_in_roi:laptop:log_zone",
+      "voice_prompt": "Step 1: Open the mission notebook in the central log zone.",
+      "severity": 0.4,
+      "irreversible": false,
+      "verification": {
+        "mode": "vision_only",
+        "signal": null
+      },
+      "expected_targets": ["log_zone"],
+      "confusable_targets": ["staging_zone", "storage_zone"]
+    },
+    {
+      "id": 2,
+      "name": "pickup_pen",
+      "requires_objects": ["pen"],
+      "event": "object_in_hand:pen|object_in_roi:pen:log_zone",
+      "depends_on": [1],
+      "voice_prompt": "Step 2: Pick up the logging pen.",
+      "severity": 0.5,
+      "irreversible": false,
+      "verification": {
+        "mode": "vision_only",
+        "signal": null
+      },
+      "expected_targets": ["log_zone"],
+      "confusable_targets": ["storage_zone"]
+    },
+    {
+      "id": 3,
+      "name": "write_log_entry",
+      "requires_objects": ["pen"],
+      "event": "object_stationary_in_roi:pen:log_zone",
+      "depends_on": [2],
+      "voice_prompt": "Step 3: Write the log entry by holding the pen over the notebook.",
+      "severity": 0.6,
+      "irreversible": false,
+      "verification": {
+        "mode": "vision_only",
+        "signal": null
+      },
+      "expected_targets": ["log_zone"],
+      "confusable_targets": ["staging_zone", "storage_zone"]
+    },
+    {
+      "id": 4,
+      "name": "place_bottle_staging",
+      "requires_objects": ["bottle"],
+      "event": "object_in_roi:bottle:staging_zone",
+      "depends_on": [3],
+      "voice_prompt": "Step 4: Place the sample bottle in the staging zone.",
+      "severity": 0.7,
+      "irreversible": false,
+      "verification": {
+        "mode": "vision_only",
+        "signal": null
+      },
+      "expected_targets": ["staging_zone"],
+      "confusable_targets": ["log_zone", "storage_zone"]
+    },
+    {
+      "id": 5,
+      "name": "cap_bottle",
+      "requires_objects": ["bottle"],
+      "event": "object_stationary_in_roi:bottle:staging_zone",
+      "depends_on": [4],
+      "voice_prompt": "Step 5: Cap the bottle to seal the sample container.",
+      "severity": 0.95,
+      "irreversible": true,
+      "verification": {
+        "mode": "vision_only",
+        "signal": null
+      },
+      "expected_targets": ["staging_zone"],
+      "confusable_targets": ["storage_zone", "log_zone"]
+    },
+    {
+      "id": 6,
+      "name": "inspect_seal_dwell",
+      "requires_objects": ["bottle"],
+      "event": "dwell_object:bottle:staging_zone:2s",
+      "depends_on": [5],
+      "voice_prompt": "Step 6: Hold the sealed bottle steady for two seconds for inspection.",
+      "severity": 0.8,
+      "irreversible": false,
+      "verification": {
+        "mode": "vision+brightness",
+        "target_roi": "staging_zone",
+        "brightness_delta_threshold": 6.0
+      },
+      "expected_targets": ["staging_zone"],
+      "confusable_targets": []
+    },
+    {
+      "id": 7,
+      "name": "stow_sealed_bottle",
+      "requires_objects": ["bottle"],
+      "event": "object_in_roi:bottle:storage_zone",
+      "depends_on": [6],
+      "voice_prompt": "Step 7: Move the sealed bottle to the storage zone to complete protocol.",
+      "severity": 0.5,
+      "irreversible": false,
+      "verification": {
+        "mode": "vision_only",
+        "signal": null
+      },
+      "expected_targets": ["storage_zone"],
+      "confusable_targets": ["log_zone"]
+    }
+  ]
+}
