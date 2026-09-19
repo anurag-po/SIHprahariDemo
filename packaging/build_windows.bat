@@ -27,11 +27,11 @@ if not exist "dist\PRAHARI\PRAHARI.exe" (
     exit /b 1
 )
 
-if not exist "dist\PRAHARI\_internal\models\yolov8n.pt" if not exist "dist\PRAHARI\models\yolov8n.pt" (
-    echo [*] Copying models folder into dist\PRAHARI\models...
-    if not exist "dist\PRAHARI\models" mkdir "dist\PRAHARI\models"
-    copy /y "models\yolov8n.pt" "dist\PRAHARI\models\" >nul 2>&1
-)
+echo [*] Syncing models folder into dist\PRAHARI\models...
+if not exist "dist\PRAHARI\models" mkdir "dist\PRAHARI\models"
+xcopy /e /i /y "models" "dist\PRAHARI\models\" >nul 2>&1
+if not exist "dist\PRAHARI\_internal\models" mkdir "dist\PRAHARI\_internal\models"
+xcopy /e /i /y "models" "dist\PRAHARI\_internal\models\" >nul 2>&1
 
 if not exist "dist\PRAHARI\_internal\config" if not exist "dist\PRAHARI\config" (
     echo [*] Copying config folder into dist\PRAHARI\config...
