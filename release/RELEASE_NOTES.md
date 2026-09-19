@@ -36,7 +36,7 @@
 | Asset File | Size | Description | SHA-256 Hash |
 | :--- | :--- | :--- | :--- |
 | **`PRAHARI-Setup-v1.0.0.exe`** | ~19 KB | Native Windows Installer Bootstrapper | *(Compiled binary)* |
-| **`PRAHARI-v1.0.0-Windows-x64.zip`** | ~306 MB | Self-Contained Portable Application Archive | `4cead32831dc9ff6cad84e0f965d74a5fdfdb3d2240125b28caabebe3c9cfe62` |
+| **`PRAHARI-v1.0.0-Windows-x64.zip`** | ~306 MB | Self-Contained Portable Application Archive | `09622cc3ae5cb92f2812b67db6e5eb2b0a6177726818de4b26c499d6d4a5897b` |
 | **`SHA256SUMS.txt`** | ~100 B | Cryptographic SHA-256 Checksum List | — |
 
 ---
