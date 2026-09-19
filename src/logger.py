@@ -10,11 +10,16 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
+try:
+    from paths import get_logs_dir
+except ImportError:
+    get_logs_dir = lambda: os.path.abspath("logs")
+
 
 class SessionLogger:
-    def __init__(self, experiment_id: str, logs_dir: str = "logs"):
+    def __init__(self, experiment_id: str, logs_dir: Optional[str] = None):
         self.experiment_id = experiment_id
-        self.logs_dir = logs_dir
+        self.logs_dir = logs_dir if logs_dir is not None else get_logs_dir()
         os.makedirs(self.logs_dir, exist_ok=True)
         
         self.session_timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

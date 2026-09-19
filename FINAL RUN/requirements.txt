@@ -1,9 +1,0 @@
-# PRAHARI Mission HAR Assistant - Dependencies
-
-ultralytics
-mediapipe
-opencv-python
-pyttsx3
-PyQt6
-numpy
-requests

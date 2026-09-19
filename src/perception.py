@@ -12,6 +12,12 @@ import cv2
 import numpy as np
 
 
+try:
+    from paths import resolve_asset_path
+except ImportError:
+    resolve_asset_path = lambda p: p
+
+
 class PerceptionEngine:
     def __init__(
         self,
@@ -36,14 +42,15 @@ class PerceptionEngine:
     def _init_yolo(self):
         try:
             from ultralytics import YOLO
-            resolved_path = self.model_path
+            resolved_path = resolve_asset_path(self.model_path)
             if not os.path.exists(resolved_path):
-                # Check project root before letting Ultralytics auto-download
-                root_path = os.path.join(os.path.dirname(__file__), "..", "yolov8n.pt")
-                if os.path.exists(root_path):
-                    resolved_path = root_path
+                # Fallback to yolov8n.pt in root or cwd
+                if os.path.exists("yolov8n.pt"):
+                    resolved_path = os.path.abspath("yolov8n.pt")
                 else:
-                    resolved_path = "yolov8n.pt"
+                    alt = resolve_asset_path("yolov8n.pt")
+                    if os.path.exists(alt):
+                        resolved_path = alt
             self.yolo_model = YOLO(resolved_path)
             print(f"[PerceptionEngine] YOLO detector loaded ({resolved_path}).")
         except Exception as e:

@@ -12,12 +12,17 @@ from typing import Optional
 import cv2
 import numpy as np
 
+try:
+    from paths import get_recordings_dir
+except ImportError:
+    get_recordings_dir = lambda: os.path.abspath("recordings")
+
 
 class DualStreamer:
     def __init__(
         self,
         experiment_id: str,
-        recordings_dir: str = "recordings",
+        recordings_dir: Optional[str] = None,
         width: int = 640,
         height: int = 480,
         fps: int = 30,
@@ -25,7 +30,7 @@ class DualStreamer:
         stream_port: int = 5000,
     ):
         self.experiment_id = experiment_id
-        self.recordings_dir = recordings_dir
+        self.recordings_dir = recordings_dir if recordings_dir is not None else get_recordings_dir()
         self.width = width
         self.height = height
         self.fps = fps

@@ -28,10 +28,19 @@ models/*.pt
 models/*.task
 *.pt
 
+# Large release archives (Upload ZIP to GitHub Releases page, not git commit)
+release/*.zip
+*.zip
+
 # Logs & Recordings
 logs/*.jsonl
 logs/**/*.jsonl
 recordings/*.mp4
+
+# Legacy / Scratch folders
+FINAL RUN/
+prahari.exe
+installer.zip
 
 # OS / IDE
 .DS_Store

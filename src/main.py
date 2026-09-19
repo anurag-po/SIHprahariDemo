@@ -51,16 +51,23 @@ def parse_arguments():
     return parser.parse_args()
 
 
+try:
+    from paths import resolve_asset_path
+except ImportError:
+    resolve_asset_path = lambda p: p
+
+
 def load_config(config_path: str) -> Dict[str, Any]:
-    if not os.path.exists(config_path):
+    resolved = resolve_asset_path(config_path)
+    if not os.path.exists(resolved):
         # Check if relative to project root
         alt_path = os.path.join(os.path.dirname(__file__), "..", config_path)
         if os.path.exists(alt_path):
-            config_path = alt_path
+            resolved = alt_path
         else:
             raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(resolved, "r", encoding="utf-8") as f:
         return json.load(f)
 
 

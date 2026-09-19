@@ -269,17 +269,6 @@ class ExperimentValidator:
 
         else:
             # OUT-OF-SEQUENCE / VIOLATION
-            # Wait 3 seconds after completing step narration before giving the first error
-            if self.voice:
-                if getattr(self.voice, "is_speaking", False):
-                    return None
-                last_guidance_time = getattr(self.voice, "last_guidance_completed_time", 0.0)
-                if (now - last_guidance_time) < 3.0:
-                    return None
-
-            if (now - getattr(self, "step_start_time", 0.0)) < 4.0:
-                return None
-
             expected_step_ids = self.get_expected_next_steps()
             expected_names = [self.steps_by_id[eid]["name"] for eid in expected_step_ids]
             missing_names = [self.steps_by_id[mid]["name"] for mid in missing_deps]
@@ -312,8 +301,16 @@ class ExperimentValidator:
                         alert_payload=alert_payload,
                     )
 
+                # Gate voice alert if speech is active or during initial grace period
+                can_speak = True
                 if self.voice:
-                    self.voice.say_alert(alert_payload)
+                    if getattr(self.voice, "is_speaking", False):
+                        can_speak = False
+                    last_guidance_time = getattr(self.voice, "last_guidance_completed_time", 0.0)
+                    if (now - last_guidance_time) < 2.0:
+                        can_speak = False
+                    if can_speak:
+                        self.voice.say_alert(alert_payload)
 
                 if self.scorer:
                     self.scorer.on_deviation(step_id, timestamp=now)
