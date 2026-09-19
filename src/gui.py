@@ -25,7 +25,7 @@ try:
     from PyQt6.QtGui import QImage, QPixmap, QFont
     from PyQt6.QtWidgets import (
         QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-        QTextEdit, QProgressBar, QGroupBox, QCheckBox, QPushButton
+        QTextEdit, QProgressBar, QGroupBox, QCheckBox, QPushButton, QLineEdit
     )
     HAS_PYQT = True
 except ImportError:
@@ -72,16 +72,16 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
         self.setMinimumSize(1280, 800)
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #0d1117;
-                color: #e6edf3;
+                background-color: #000000;
+                color: #e6e6e6;
             }
             QGroupBox {
-                background-color: #161b22;
-                border: 1px solid #30363d;
+                background-color: #0c0c0c;
+                border: 1px solid #222222;
                 border-radius: 6px;
                 margin-top: 10px;
                 font-weight: bold;
-                color: #58a6ff;
+                color: #f0f0f0;
                 padding-top: 14px;
             }
             QGroupBox::title {
@@ -90,30 +90,30 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
                 padding: 0 5px;
             }
             QLabel {
-                color: #c9d1d9;
+                color: #cccccc;
             }
             QTextEdit {
-                background-color: #0d1117;
-                border: 1px solid #30363d;
+                background-color: #050505;
+                border: 1px solid #222222;
                 border-radius: 4px;
-                color: #7ee787;
+                color: #00e676;
                 font-family: 'Consolas', 'Courier New', monospace;
                 font-size: 11px;
             }
             QProgressBar {
-                border: 1px solid #30363d;
+                border: 1px solid #222222;
                 border-radius: 4px;
                 text-align: center;
-                background-color: #21262d;
+                background-color: #141414;
                 color: #ffffff;
                 font-weight: bold;
             }
             QProgressBar::chunk {
-                background-color: #238636;
+                background-color: #ff9800;
                 border-radius: 3px;
             }
             QCheckBox {
-                color: #e6edf3;
+                color: #e6e6e6;
                 font-size: 12px;
                 font-weight: 500;
             }
@@ -137,27 +137,105 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
         self.video_label = QLabel("Initializing Video Feed...")
         self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.video_label.setMinimumSize(640, 480)
-        self.video_label.setStyleSheet("background-color: #090d13; border: 1px solid #30363d; border-radius: 4px;")
+        self.video_label.setStyleSheet("background-color: #000000; border: 1px solid #222222; border-radius: 4px;")
         left_layout.addWidget(self.video_label, stretch=4)
 
-        # Stream Controls Row (Flip Camera, Advance Button, Protocol Info)
+        # Connect IP Camera Section
+        ip_cam_box = QGroupBox("CONNECT IP CAM / VIDEO SOURCE")
+        ip_cam_box.setStyleSheet("""
+            QGroupBox {
+                background-color: #050505;
+                border: 1px solid #1f1f1f;
+                border-radius: 5px;
+                margin-top: 4px;
+                padding-top: 10px;
+                color: #e0e0e0;
+                font-size: 11px;
+            }
+        """)
+        ip_cam_layout = QHBoxLayout(ip_cam_box)
+        ip_cam_layout.setContentsMargins(8, 4, 8, 6)
+
+        self.ip_input = QLineEdit()
+        self.ip_input.setPlaceholderText("IP cam URL (e.g. http://192.168.1.50:8080/video or rtsp://...) or webcam index (0, 1)")
+        self.ip_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #121212;
+                border: 1px solid #333333;
+                border-radius: 4px;
+                color: #ffffff;
+                padding: 5px 8px;
+                font-family: 'Consolas', monospace;
+                font-size: 11px;
+            }
+            QLineEdit:focus {
+                border: 1px solid #ff9800;
+            }
+        """)
+        self.ip_input.returnPressed.connect(self._on_connect_ip_cam)
+        ip_cam_layout.addWidget(self.ip_input, stretch=3)
+
+        self.btn_connect_ip = QPushButton("🔗 Connect IP Cam")
+        self.btn_connect_ip.setStyleSheet("""
+            QPushButton {
+                background-color: #212121;
+                color: #ff9800;
+                border: 1px solid #ff9800;
+                font-weight: bold;
+                padding: 5px 12px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #ff9800;
+                color: #000000;
+            }
+        """)
+        self.btn_connect_ip.clicked.connect(self._on_connect_ip_cam)
+        ip_cam_layout.addWidget(self.btn_connect_ip)
+
+        self.ip_status_lbl = QLabel("Source: Camera 0")
+        self.ip_status_lbl.setStyleSheet("color: #888888; font-size: 11px;")
+        ip_cam_layout.addWidget(self.ip_status_lbl)
+
+        left_layout.addWidget(ip_cam_box)
+
+        # Stream Controls Row (Flip Camera, Advance Button, Recite Steps, Protocol Info)
         controls_layout = QHBoxLayout()
         self.flip_checkbox = QCheckBox("Flip Camera (Mirror View)")
         self.flip_checkbox.setChecked(self.initial_flip)
         self.flip_checkbox.stateChanged.connect(self._on_flip_toggle)
         controls_layout.addWidget(self.flip_checkbox)
 
-        self.btn_advance = QPushButton("⏭ Advance Step (Space)")
-        self.btn_advance.setStyleSheet("""
+        self.btn_recite = QPushButton("🔊 Recite Steps")
+        self.btn_recite.setStyleSheet("""
             QPushButton {
-                background-color: #238636;
+                background-color: #1a1a1a;
                 color: #ffffff;
+                border: 1px solid #333333;
                 font-weight: bold;
                 padding: 5px 12px;
                 border-radius: 4px;
             }
             QPushButton:hover {
-                background-color: #2ea043;
+                background-color: #2a2a2a;
+                border: 1px solid #ff9800;
+            }
+        """)
+        self.btn_recite.clicked.connect(self._on_recite_clicked)
+        controls_layout.addWidget(self.btn_recite)
+
+        self.btn_advance = QPushButton("⏭ Advance Step (Space)")
+        self.btn_advance.setStyleSheet("""
+            QPushButton {
+                background-color: #1b5e20;
+                color: #ffffff;
+                font-weight: bold;
+                padding: 5px 12px;
+                border-radius: 4px;
+                border: 1px solid #2e7d32;
+            }
+            QPushButton:hover {
+                background-color: #2e7d32;
             }
         """)
         self.btn_advance.clicked.connect(self.trigger_next_step)
@@ -166,7 +244,7 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
         controls_layout.addStretch()
 
         stream_info = QLabel(f"Protocol: {self.display_name}")
-        stream_info.setStyleSheet("color: #8b949e; font-size: 11px; font-weight: bold;")
+        stream_info.setStyleSheet("color: #888888; font-size: 11px; font-weight: bold;")
         controls_layout.addWidget(stream_info)
         left_layout.addLayout(controls_layout)
 
@@ -186,7 +264,8 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
         self.status_banner.setWordWrap(True)
         self.status_banner.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.status_banner.setStyleSheet("""
-            background-color: #1f6feb;
+            background-color: #161616;
+            border: 1px solid #333333;
             color: #ffffff;
             font-size: 13px;
             font-weight: bold;
@@ -198,7 +277,7 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
         # Explainable Detail Label
         self.alert_detail_label = QLabel("No active deviations. Sequence nominal.")
         self.alert_detail_label.setWordWrap(True)
-        self.alert_detail_label.setStyleSheet("color: #8b949e; font-size: 11px; padding: 2px;")
+        self.alert_detail_label.setStyleSheet("color: #888888; font-size: 11px; padding: 2px;")
         status_layout.addWidget(self.alert_detail_label)
 
         right_layout.addWidget(self.status_box)
@@ -216,7 +295,7 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
             target_str = f" [ROI: {', '.join(exp_targets)}]" if exp_targets else ""
 
             lbl = QLabel(f"○ Step {s_id}: {s_name}{target_str}")
-            lbl.setStyleSheet("color: #8b949e; font-size: 11px; padding: 2px;")
+            lbl.setStyleSheet("color: #777777; font-size: 11px; padding: 2px;")
             self.step_labels[s_id] = lbl
             self.steps_layout.addWidget(lbl)
 
@@ -228,7 +307,7 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
 
         score_header = QHBoxLayout()
         self.score_label = QLabel("LIVE QUALITY SCORE: 100.0%")
-        self.score_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #58a6ff;")
+        self.score_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #ffffff;")
         score_header.addWidget(self.score_label)
         score_layout.addLayout(score_header)
 
@@ -238,7 +317,7 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
         score_layout.addWidget(self.score_bar)
 
         self.metrics_label = QLabel("Accuracy: 100% | Speed: 1.00 | Cleanliness: 100% | Deviations: 0 | Near-Misses: 0")
-        self.metrics_label.setStyleSheet("color: #8b949e; font-size: 11px;")
+        self.metrics_label.setStyleSheet("color: #888888; font-size: 11px;")
         score_layout.addWidget(self.metrics_label)
 
         # Mock Sensor Telemetry Checkbox (§5 demo trigger)
@@ -267,6 +346,36 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
         self.timer.timeout.connect(self._update_loop)
         self.timer.start(30)  # ~30 FPS on main GUI thread
 
+    def _on_connect_ip_cam(self):
+        url_text = self.ip_input.text().strip()
+        if not url_text:
+            return
+        if url_text.isdigit():
+            source = int(url_text)
+        else:
+            source = url_text
+
+        self.ip_status_lbl.setText("Connecting...")
+        self.ip_status_lbl.setStyleSheet("color: #ff9800; font-size: 11px;")
+        QApplication.processEvents()
+
+        if self.cap and self.cap.switch_source(source):
+            src_display = str(source)
+            if len(src_display) > 28:
+                src_display = src_display[:25] + "..."
+            self.ip_status_lbl.setText(f"Connected: {src_display}")
+            self.ip_status_lbl.setStyleSheet("color: #00e676; font-size: 11px; font-weight: bold;")
+            self.append_log(f"VIDEO: Connected to source: {source} (IP Cam active)")
+        else:
+            self.ip_status_lbl.setText("Connection failed")
+            self.ip_status_lbl.setStyleSheet("color: #f44336; font-size: 11px;")
+            self.append_log(f"VIDEO: Failed to connect to {source}. Ensure device is on same Wi-Fi and stream URL is active (e.g. http://<ip>:8080/video)")
+
+    def _on_recite_clicked(self):
+        if self.validator:
+            self.validator.recite_protocol()
+            self.append_log("VOICE: Reciting protocol roadmap aloud.")
+
     def _on_flip_toggle(self, state):
         flip_enabled = (state == 2 or state == Qt.CheckState.Checked)
         if self.cap:
@@ -278,6 +387,39 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
         if self.verifier:
             self.verifier.set_mock_sensor(confirmed=confirmed, reading=3.3 if confirmed else 0.0)
             self.append_log(f"TELEMETRY: Mock Sensor State toggled -> {'CONFIRMED (3.3V)' if confirmed else 'FAILED (0.0V)'}")
+
+    def trigger_next_step(self):
+        """Force-advance the validator to the next expected step (for demo/manual override)."""
+        if not self.validator:
+            self.append_log("ADVANCE: No validator connected.")
+            return
+
+        expected = self.validator.get_expected_next_steps()
+        if not expected:
+            self.append_log("ADVANCE: All steps already completed.")
+            return
+
+        step_id = min(expected)
+        step_def = self.validator.steps_by_id.get(step_id)
+        if not step_def:
+            return
+
+        # Synthesize a high-confidence event matching this step's trigger
+        event_str = step_def.get("event", "")
+        # Take the first alternative if pipe-separated
+        primary_event = event_str.split("|")[0].strip() if event_str else f"manual_advance:{step_id}"
+
+        synthetic_event = {
+            "type": primary_event,
+            "object": "manual",
+            "confidence": 1.0,
+            "timestamp": time.time(),
+        }
+        result = self.validator.process_event(synthetic_event, current_frame=None, now=time.time())
+        if result:
+            self.append_log(f"ADVANCE: Step {step_id} ({step_def['name']}) -> {result.get('status', 'OK')}")
+        else:
+            self.append_log(f"ADVANCE: Step {step_id} event sent but not accepted (check dependencies).")
 
     def append_log(self, text: str):
         self.log_queue.put(text)
@@ -308,13 +450,13 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
 
             if s_id in completed_ids:
                 status_text = f"✓ Step {s_id}: {s_name} — COMPLETED (OK)"
-                style = "color: #7ee787; font-weight: bold; font-size: 11px; padding: 2px;"
+                style = "color: #00e676; font-weight: bold; font-size: 11px; padding: 2px;"
             elif s_id == primary_active_id:
                 status_text = f"▶ Step {s_id}: {s_name}{target_str} — CURRENT ACTIVE"
-                style = "color: #58a6ff; font-weight: bold; font-size: 11px; padding: 2px; background-color: #1f2937; border-radius: 3px;"
+                style = "color: #ff9800; font-weight: bold; font-size: 11px; padding: 2px; background-color: #181818; border: 1px solid #ff9800; border-radius: 3px;"
             else:
                 status_text = f"○ Step {s_id}: {s_name}{target_str} — PENDING"
-                style = "color: #8b949e; font-size: 11px; padding: 2px;"
+                style = "color: #777777; font-size: 11px; padding: 2px;"
 
             if s_id in self.step_labels:
                 self.step_labels[s_id].setText(status_text)
@@ -338,15 +480,48 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
                 cv2.LINE_AA,
             )
 
-        # Draw Trajectory Prediction Vectors if Risk Engine active
-        if trajectories:
-            for hand_id, traj in trajectories.items():
-                if len(traj) >= 2:
-                    pts = np.array([(int(p[0]), int(p[1])) for p in traj], np.int32)
-                    cv2.polylines(display_frame, [pts], False, (255, 255, 0), 2)
-                    p_start = (int(traj[0][0]), int(traj[0][1]))
-                    p_end = (int(traj[-1][0]), int(traj[-1][1]))
-                    cv2.arrowedLine(display_frame, p_start, p_end, (0, 255, 255), 2, tipLength=0.3)
+        # Draw Next Step text overlay in bottom-right corner
+        if self.validator:
+            overlay_h, overlay_w = display_frame.shape[:2]
+            margin = 12
+            line_height = 22
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.50
+            thickness = 1
+
+            # Find last completed step name for green text
+            completed_ids = getattr(self.validator, "completed_step_ids", set())
+            if completed_ids:
+                last_done_id = max(completed_ids)
+                last_done_step = self.validator.steps_by_id.get(last_done_id)
+                if last_done_step:
+                    done_text = f"[OK] Step {last_done_id}: {last_done_step['name'].replace('_', ' ').title()}"
+                    text_size = cv2.getTextSize(done_text, font, font_scale, thickness)[0]
+                    tx = overlay_w - text_size[0] - margin
+                    ty = overlay_h - margin - line_height
+                    # Dark background for readability
+                    cv2.rectangle(display_frame, (tx - 4, ty - text_size[1] - 4), (tx + text_size[0] + 4, ty + 6), (0, 0, 0), -1)
+                    cv2.putText(display_frame, done_text, (tx, ty), font, font_scale, (126, 231, 135), thickness, cv2.LINE_AA)
+
+            # Find next pending step for white text
+            expected = self.validator.get_expected_next_steps()
+            if expected:
+                next_id = min(expected)
+                next_step = self.validator.steps_by_id.get(next_id)
+                if next_step:
+                    next_text = f">> Step {next_id}: {next_step['name'].replace('_', ' ').title()}"
+                    text_size = cv2.getTextSize(next_text, font, font_scale, thickness)[0]
+                    tx = overlay_w - text_size[0] - margin
+                    ty = overlay_h - margin
+                    cv2.rectangle(display_frame, (tx - 4, ty - text_size[1] - 4), (tx + text_size[0] + 4, ty + 6), (0, 0, 0), -1)
+                    cv2.putText(display_frame, next_text, (tx, ty), font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
+            elif self.validator.is_completed:
+                done_text = ">> ALL STEPS COMPLETED"
+                text_size = cv2.getTextSize(done_text, font, font_scale, thickness)[0]
+                tx = overlay_w - text_size[0] - margin
+                ty = overlay_h - margin
+                cv2.rectangle(display_frame, (tx - 4, ty - text_size[1] - 4), (tx + text_size[0] + 4, ty + 6), (0, 0, 0), -1)
+                cv2.putText(display_frame, done_text, (tx, ty), font, font_scale, (126, 231, 135), thickness, cv2.LINE_AA)
 
         # Convert to QPixmap on GUI thread
         rgb = cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB)

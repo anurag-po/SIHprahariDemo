@@ -23,6 +23,11 @@ class VoiceAssistant:
         self.last_warning_key: Optional[str] = None
         self.last_warning_time: float = 0.0
         self.warning_cooldown: float = 4.0
+        self._last_alert_text: Optional[str] = None
+        self._last_alert_time: float = 0.0
+        self._alert_cooldown: float = 10.0
+        self.is_speaking: bool = False
+        self.last_guidance_completed_time: float = time.time()
 
         self.worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
         self.worker_thread.start()
@@ -71,6 +76,7 @@ class VoiceAssistant:
 
             print(f"[VOICE - {msg_type.upper()}]: {text}")
 
+            self.is_speaking = True
             spoken_success = False
 
             # 1. Try Windows SAPI Direct
@@ -109,6 +115,11 @@ class VoiceAssistant:
                 except Exception:
                     pass
 
+            self.is_speaking = False
+            now = time.time()
+            if msg_type == "guidance":
+                self.last_guidance_completed_time = now
+
             self.msg_queue.task_done()
 
         if has_com:
@@ -123,7 +134,7 @@ class VoiceAssistant:
         self.msg_queue.put(("guidance", text))
 
     def say_alert(self, text_or_payload: Any):
-        """Immediate out-of-sequence or sequence violation alert."""
+        """Immediate out-of-sequence or sequence violation alert with strict rate-limiting."""
         if isinstance(text_or_payload, dict):
             expected = text_or_payload.get("expected", "")
             detected = text_or_payload.get("detected", "")
@@ -132,7 +143,32 @@ class VoiceAssistant:
         else:
             spoken = f"Alert. {text_or_payload}"
 
+        now = time.time()
+        # Prevent repeat alert storm / squeaking
+        if (now - self._last_alert_time) < self._alert_cooldown and spoken == self._last_alert_text:
+            return
+        if (now - self._last_alert_time) < 4.0:
+            return
+
+        self._last_alert_text = spoken
+        self._last_alert_time = now
+
+        # Prevent queue overflow
+        with self.msg_queue.mutex:
+            if len(self.msg_queue.queue) > 2:
+                self.msg_queue.queue.clear()
+
         self.msg_queue.put(("alert", spoken))
+
+    def recite_steps(self, steps_list: list):
+        """Recite the full sequence of experiment protocol steps aloud."""
+        summary_items = []
+        for s in steps_list:
+            s_id = s.get("id", "")
+            s_name = s.get("name", "").replace("_", " ").title()
+            summary_items.append(f"Step {s_id}: {s_name}")
+        full_text = "Protocol roadmap: " + ". ".join(summary_items) + "."
+        self.say_guidance(full_text)
 
     def say_predictive_warning(self, target_roi: str, step_name: str, episode_id: Optional[str] = None):
         """

@@ -53,7 +53,7 @@
       "id": 3,
       "name": "write_log_entry",
       "requires_objects": ["pen"],
-      "event": "object_stationary_in_roi:pen:log_zone",
+      "event": "object_stationary_in_roi:pen:log_zone|pen_book_colocation:log_zone:5s",
       "depends_on": [2],
       "voice_prompt": "Step 3: Write the log entry by holding the pen over the notebook.",
       "severity": 0.6,

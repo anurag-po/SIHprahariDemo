@@ -41,15 +41,24 @@ class ExperimentValidator:
         self.last_alert_payload: Optional[Dict[str, Any]] = None
         self.current_status_banner = "Ready. Awaiting step 1."
         self.is_completed = False
+        self.last_violation_time: Dict[int, float] = {}
+        self.violation_cooldown: float = 6.0
+        self.step_start_time: float = time.time()
 
         # Initial prompt announcement
         self._announce_initial()
 
     def _announce_initial(self):
+        self.step_start_time = time.time()
         first_steps = self.get_expected_next_steps()
         if first_steps and self.voice:
             first_step = self.steps_by_id[first_steps[0]]
             self.voice.say_guidance(first_step.get("voice_prompt", f"Begin with {first_step['name']}."))
+
+    def recite_protocol(self):
+        """Recite the complete protocol steps roadmap aloud."""
+        if self.voice:
+            self.voice.recite_steps(self.steps)
 
     def get_expected_next_steps(self) -> List[int]:
         """Returns list of step IDs whose dependencies are fully satisfied but not yet completed."""
@@ -92,6 +101,17 @@ class ExperimentValidator:
         target_roi = event_data.get("predicted_wrong_target", "")
         risk_score = event_data.get("risk_score", 0.5)
         alert_payload = event_data.get("alert_payload", {})
+
+        # Wait 3 seconds after completing step narration before giving advisory warnings
+        now_time = time.time()
+        if self.voice:
+            if getattr(self.voice, "is_speaking", False):
+                return
+            last_g = getattr(self.voice, "last_guidance_completed_time", 0.0)
+            if (now_time - last_g) < 3.0:
+                return
+        if (now_time - getattr(self, "step_start_time", 0.0)) < 4.0:
+            return
 
         # 1. Voice warning (rate-limited)
         if self.voice:
@@ -211,6 +231,7 @@ class ExperimentValidator:
             nxt = self.get_expected_next_steps()
             if nxt:
                 next_step = self.steps_by_id[min(nxt)]
+                self.step_start_time = now
                 self.current_status_banner = f"Current: Step {step_id} completed ({final_status}). Next: Step {next_step['id']} - {next_step['name']}"
                 if self.voice:
                     self.voice.say_guidance(next_step.get("voice_prompt", f"Proceed to {next_step['name']}."))
@@ -241,6 +262,17 @@ class ExperimentValidator:
 
         else:
             # OUT-OF-SEQUENCE / VIOLATION
+            # Wait 3 seconds after completing step narration before giving the first error
+            if self.voice:
+                if getattr(self.voice, "is_speaking", False):
+                    return None
+                last_guidance_time = getattr(self.voice, "last_guidance_completed_time", 0.0)
+                if (now - last_guidance_time) < 3.0:
+                    return None
+
+            if (now - getattr(self, "step_start_time", 0.0)) < 4.0:
+                return None
+
             expected_step_ids = self.get_expected_next_steps()
             expected_names = [self.steps_by_id[eid]["name"] for eid in expected_step_ids]
             missing_names = [self.steps_by_id[mid]["name"] for mid in missing_deps]
@@ -258,21 +290,26 @@ class ExperimentValidator:
             self.last_alert_payload = alert_payload
             self.current_status_banner = f"ALERT: Step {step_id} ({step_name}) out of sequence! Missing: {missing_deps}"
 
-            if self.logger:
-                self.logger.log_step(
-                    step_id=step_id,
-                    step_name=step_name,
-                    status="OUT_OF_SEQUENCE",
-                    detail=f"Missing prerequisites: {missing_deps}",
-                    confidence=confidence,
-                    alert_payload=alert_payload,
-                )
+            # Only trigger voice alert and scoring penalty if outside violation cooldown
+            last_v_time = self.last_violation_time.get(step_id, 0.0)
+            is_new_violation = (now - last_v_time) >= self.violation_cooldown
+            if is_new_violation:
+                self.last_violation_time[step_id] = now
+                if self.logger:
+                    self.logger.log_step(
+                        step_id=step_id,
+                        step_name=step_name,
+                        status="OUT_OF_SEQUENCE",
+                        detail=f"Missing prerequisites: {missing_deps}",
+                        confidence=confidence,
+                        alert_payload=alert_payload,
+                    )
 
-            if self.voice:
-                self.voice.say_alert(alert_payload)
+                if self.voice:
+                    self.voice.say_alert(alert_payload)
 
-            if self.scorer:
-                self.scorer.on_deviation(step_id, timestamp=now)
+                if self.scorer:
+                    self.scorer.on_deviation(step_id, timestamp=now)
 
             if self.on_status_change:
                 self.on_status_change({

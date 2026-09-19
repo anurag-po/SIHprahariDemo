@@ -25,6 +25,7 @@ class ObjectMicroFSM:
         self.current_rois: List[str] = []
         self.last_seen_time = 0.0
         self.dwell_start_time: Optional[float] = None
+        self.dwell_emitted: bool = False
         self.last_emitted_event: Optional[str] = None
 
 
@@ -46,6 +47,8 @@ class ObjectTracker:
         self.hand_centroids: Dict[str, Tuple[float, float]] = {}
         self.stationary_movement_threshold = 6.0  # max centroid shift in pixels to be stationary
         self.in_hand_distance_threshold = 95.0    # pixel distance from hand centroid to object center
+        self.pen_book_interaction_start: Optional[float] = None
+        self.pen_book_colocation_emitted: bool = False
 
     def _get_or_create(self, label: str) -> ObjectMicroFSM:
         if label not in self.objects:
@@ -187,6 +190,14 @@ class ObjectTracker:
                 else:
                     obj.frames_stationary = 0
 
+                # Set the actual state based on accumulated evidence
+                if obj.frames_stationary >= 3:
+                    obj.state = "stationary"
+                elif rois_inside:
+                    obj.state = "in_roi"
+                else:
+                    obj.state = "moving"
+
             # Emit in_hand event if held
             if obj.state == "in_hand" and obj.frames_in_hand >= 2:
                 emitted_events.append({
@@ -224,11 +235,13 @@ class ObjectTracker:
                         "centroid": centroid,
                     })
 
-                    # 3. Dwell check (e.g. 2s steady hold)
+                    # 3. Dwell check (e.g. 2s steady hold - emitted once per steady period)
                     if obj.dwell_start_time is None:
                         obj.dwell_start_time = now
+                        obj.dwell_emitted = False
                     dwell_duration = now - obj.dwell_start_time
-                    if dwell_duration >= 2.0:
+                    if dwell_duration >= 2.0 and not getattr(obj, "dwell_emitted", False):
+                        obj.dwell_emitted = True
                         emitted_events.append({
                             "type": f"dwell_object:{label}:{r_name}:2s",
                             "object": label,
@@ -248,6 +261,7 @@ class ObjectTracker:
                 else:
                     if obj.state != "stationary":
                         obj.dwell_start_time = None
+                        obj.dwell_emitted = False
 
             # Check spans_rois (e.g. wires connecting breadboard and battery_holder)
             if "wire" in label:
@@ -270,5 +284,50 @@ class ObjectTracker:
                         "confidence": conf,
                         "timestamp": now,
                     })
+
+        # --- Check 5-Second Pen + Book / Notebook Colocation Interaction ---
+        pen_obj = self.objects.get("pen")
+        book_obj = self.objects.get("book") or self.objects.get("laptop")
+        interacting = False
+
+        if pen_obj:
+            pen_time_ok = (now - pen_obj.last_seen_time) < 1.0
+            if pen_time_ok:
+                pen_center = pen_obj.current_centroid
+                # Case 1: Both pen and book are present and interacting
+                if book_obj and (now - book_obj.last_seen_time) < 1.0:
+                    book_center = book_obj.current_centroid
+                    both_in_log = ("log_zone" in pen_obj.current_rois) or ("log_zone" in book_obj.current_rois)
+                    dist = math.hypot(pen_center[0] - book_center[0], pen_center[1] - book_center[1]) if (pen_center and book_center) else 9999
+                    boxes_overlap = False
+                    if pen_obj.current_bbox and book_obj.current_bbox:
+                        boxes_overlap = (self.box_iou(pen_obj.current_bbox, book_obj.current_bbox) > 0.05 or
+                                         self.box_overlap_ratio(pen_obj.current_bbox, book_obj.current_bbox) > 0.08)
+                    if both_in_log or boxes_overlap or dist < 220.0:
+                        interacting = True
+                # Case 2: Pen is interacting inside the log_zone (where notebook is expected)
+                elif "log_zone" in pen_obj.current_rois or pen_obj.state in ["stationary", "in_hand"]:
+                    interacting = True
+
+        if interacting:
+            if self.pen_book_interaction_start is None:
+                self.pen_book_interaction_start = now
+                self.pen_book_colocation_emitted = False
+            duration = now - self.pen_book_interaction_start
+            if duration >= 5.0 and not self.pen_book_colocation_emitted:
+                self.pen_book_colocation_emitted = True
+                emitted_events.append({
+                    "type": "pen_book_colocation:log_zone:5s",
+                    "object": "pen",
+                    "roi": "log_zone",
+                    "confidence": 0.95,
+                    "timestamp": now,
+                    "centroid": pen_obj.current_centroid if pen_obj else (320, 240),
+                })
+        else:
+            # Reset after break in contact
+            if self.pen_book_interaction_start and (now - self.pen_book_interaction_start > 1.5):
+                self.pen_book_interaction_start = None
+                self.pen_book_colocation_emitted = False
 
         return emitted_events
