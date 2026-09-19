@@ -19,17 +19,21 @@ namespace PrahariLauncher
             Console.ResetColor();
             Console.WriteLine();
 
-            // Locate project root directory
+            // Locate true project root directory (where src/main.py exists)
             string currentDir = AppDomain.CurrentDomain.BaseDirectory;
             string projectRoot = currentDir;
 
-            if (File.Exists(Path.Combine(currentDir, "requirements.txt")) && Directory.Exists(Path.Combine(currentDir, "src")))
+            if (File.Exists(Path.Combine(currentDir, "src", "main.py")))
             {
                 projectRoot = currentDir;
             }
-            else if (Directory.Exists(Path.Combine(Directory.GetParent(currentDir).FullName, "src")))
+            else if (Directory.GetParent(currentDir) != null && File.Exists(Path.Combine(Directory.GetParent(currentDir).FullName, "src", "main.py")))
             {
                 projectRoot = Directory.GetParent(currentDir).FullName;
+            }
+            else if (Directory.GetParent(currentDir) != null && Directory.GetParent(currentDir).Parent != null && File.Exists(Path.Combine(Directory.GetParent(currentDir).Parent.FullName, "src", "main.py")))
+            {
+                projectRoot = Directory.GetParent(currentDir).Parent.FullName;
             }
 
             Console.WriteLine("[INFO] Project Root: " + projectRoot);
