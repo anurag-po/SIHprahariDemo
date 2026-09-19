@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 
 namespace PrahariLauncher
@@ -9,7 +11,7 @@ namespace PrahariLauncher
     {
         static void Main(string[] args)
         {
-            Console.Title = "PRAHARI — One-Click Launcher & Auto-Setup";
+            Console.Title = "PRAHARI — Mission HAR Assistant (Final Run)";
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("================================================================================");
             Console.WriteLine("                 🛰️  PRAHARI HAR ASSISTANT — FINAL RUN                         ");
@@ -34,7 +36,7 @@ namespace PrahariLauncher
 
             // Step 1: Detect Python
             Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine("\n[1/3] Locating Python environment...");
+            Console.WriteLine("\n[1/3] Checking Python environment...");
             Console.ResetColor();
 
             string pythonCmd = FindPython();
@@ -43,7 +45,7 @@ namespace PrahariLauncher
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine("[ERROR] Python was not found on your system.");
                 Console.WriteLine("Please install Python 3.10+ from https://www.python.org/downloads/");
-                Console.WriteLine("Remember to check the box 'Add Python to PATH' during installation.");
+                Console.WriteLine("Make sure to check the box 'Add Python to PATH' during installation.");
                 Console.ResetColor();
                 Console.WriteLine("\nPress any key to exit...");
                 Console.ReadKey();
@@ -80,21 +82,27 @@ namespace PrahariLauncher
                 RunProcess(pythonCmd, "\"" + downloadScript + "\"", projectRoot);
             }
 
-            // Step 4: Launch PRAHARI
+            // Detect Local LAN IP for phone instructions
+            string localIp = GetLocalIP();
+
+            // Step 4: Display instructions and proceed directly with Mobile Bridge
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("\n================================================================================");
-            Console.WriteLine("[3/3] Launching PRAHARI Mission HAR Assistant...");
+            Console.WriteLine("[3/3] PROCEEDING WITH MOBILE PHONE BROWSER CAMERA BRIDGE");
             Console.WriteLine("================================================================================");
             Console.ResetColor();
             Console.WriteLine();
-            Console.WriteLine("Select video feed source:");
-            Console.WriteLine("  [1] Android Phone Camera (No App / Chrome Browser Bridge) [Recommended]");
-            Console.WriteLine("  [2] Laptop / USB Webcam");
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("📱 ON YOUR PHONE:");
+            Console.WriteLine("   1. Connect phone to the same Wi-Fi as your PC.");
+            Console.WriteLine("   2. Open Chrome browser on your phone and go to:");
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("      👉 http://" + localIp + ":8000");
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("   3. Allow camera permissions when prompted.");
+            Console.ResetColor();
             Console.WriteLine();
-            Console.Write("Choice (1 or 2) [Default 1]: ");
-
-            string choice = Console.ReadLine();
-            if (string.IsNullOrWhiteSpace(choice)) choice = "1";
+            Console.WriteLine("Starting PRAHARI...");
 
             string mainScript = Path.Combine(projectRoot, "src", "main.py");
             string configPath = Path.Combine(projectRoot, "config", "desk_objects_experiment.json");
@@ -102,23 +110,9 @@ namespace PrahariLauncher
             ProcessStartInfo psi = new ProcessStartInfo();
             psi.FileName = pythonCmd;
             psi.WorkingDirectory = projectRoot;
+            psi.Arguments = "\"" + mainScript + "\" --config \"" + configPath + "\"";
+            psi.EnvironmentVariables["PRAHARI_CAMERA_TYPE"] = "browser";
             psi.UseShellExecute = false;
-
-            if (choice.Trim() == "2")
-            {
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("\n[STARTING] Launching PRAHARI with USB Camera index 0...");
-                Console.ResetColor();
-                psi.Arguments = "\"" + mainScript + "\" --config \"" + configPath + "\" --camera 0";
-            }
-            else
-            {
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("\n[STARTING] Launching PRAHARI with Mobile Phone Camera Bridge...");
-                Console.ResetColor();
-                psi.Arguments = "\"" + mainScript + "\" --config \"" + configPath + "\"";
-                psi.EnvironmentVariables["PRAHARI_CAMERA_TYPE"] = "browser";
-            }
 
             try
             {
@@ -130,11 +124,29 @@ namespace PrahariLauncher
             catch (Exception ex)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("[ERROR] Failed to start application: " + ex.Message);
+                Console.WriteLine("[ERROR] Failed to run PRAHARI: " + ex.Message);
                 Console.ResetColor();
                 Console.WriteLine("\nPress any key to exit...");
                 Console.ReadKey();
             }
+        }
+
+        static string GetLocalIP()
+        {
+            try
+            {
+                using (Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, 0))
+                {
+                    socket.Connect("8.8.8.8", 65530);
+                    IPEndPoint endPoint = socket.LocalEndPoint as IPEndPoint;
+                    if (endPoint != null)
+                    {
+                        return endPoint.Address.ToString();
+                    }
+                }
+            }
+            catch { }
+            return "192.168.1.101";
         }
 
         static string FindPython()

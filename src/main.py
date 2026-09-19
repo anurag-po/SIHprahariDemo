@@ -199,10 +199,10 @@ class PrahariApplication:
 
 def main():
     args = parse_arguments()
-    app_engine = PrahariApplication(args)
-    app_engine.start()
 
     if args.headless or not HAS_PYQT:
+        app_engine = PrahariApplication(args)
+        app_engine.start()
         if not HAS_PYQT and not args.headless:
             print("[PRAHARI] PyQt6 not installed. Running in console headless mode.")
         print("[PRAHARI] Running in headless mode. Press Ctrl+C to stop.")
@@ -215,6 +215,7 @@ def main():
             app_engine.stop()
     else:
         qt_app = QApplication(sys.argv)
+        app_engine = PrahariApplication(args)
         gui_window = PrahariMainWindow(
             experiment_config=app_engine.config,
             video_capture=app_engine.capture,
@@ -226,6 +227,7 @@ def main():
         )
         app_engine.gui_window = gui_window
         gui_window.show()
+        app_engine.start()
 
         try:
             sys.exit(qt_app.exec())
