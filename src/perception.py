@@ -1,11 +1,15 @@
 """
-Top-Notch Multi-Modal Perception Engine for PRAHARI HAR Space Experiment Assistant.
-Combines:
-1. High-Sensitivity YOLO Object Detection with Full Semantic Class Aliasing
-2. MediaPipe Hand Landmark Tracking & Biomechanical Grasp/Pinch Tool Estimation
-3. Physics-based Color & Geometry Vision Detectors (Breadboard, Wires, Battery, Gloves, Pens)
-4. Anti-Flicker Temporal Detection Persistence Buffer
-5. Dynamic Contrast & Low-Light Enhancement
+Pure Desk Objects Perception Engine for PRAHARI HAR Assistant.
+Focuses exclusively on Everyday Desk Objects Protocol:
+- Book / Notebook / Logging Journal
+- Pen / Pencil / Stylus / Marker
+- Bottle / Sample Bottle
+- Cup / Mug / Container
+- Phone / Mobile Device
+- Laptop / Computer Screen
+- Mouse / Input Device
+- Human Hand (MediaPipe Landmark Tracking & Pinch Grasp Estimation)
+- Human Operator (Person)
 """
 
 import os
@@ -25,7 +29,7 @@ class PerceptionEngine:
     def __init__(
         self,
         model_path: str = "models/yolov8n.pt",
-        confidence_threshold: float = 0.12,
+        confidence_threshold: float = 0.15,
     ):
         self.model_path = model_path
         self.conf_threshold = confidence_threshold
@@ -34,9 +38,9 @@ class PerceptionEngine:
         self.mp_hands = None
         self.mp_drawing = None
 
-        # Temporal persistence buffer: label -> {"bbox": bbox, "conf": conf, "last_seen": t}
+        # Anti-flicker temporal persistence buffer
         self.persistence_buffer: Dict[str, Dict[str, Any]] = {}
-        self.persistence_timeout_s = 0.45  # Keep detection alive across minor camera motion blur
+        self.persistence_timeout_s = 0.40
 
         self._init_yolo()
         self._init_mediapipe()
@@ -53,9 +57,9 @@ class PerceptionEngine:
                     if os.path.exists(alt):
                         resolved_path = alt
             self.yolo_model = YOLO(resolved_path)
-            print(f"[PerceptionEngine] YOLO detector initialized successfully from {resolved_path}")
+            print(f"[PerceptionEngine] YOLO detector loaded ({resolved_path})")
         except Exception as e:
-            print(f"[PerceptionEngine] YOLO init note ({e}). Using advanced CV fallback detector.")
+            print(f"[PerceptionEngine] YOLO initialization note ({e}). Using CV tracking fallback.")
             self.yolo_model = None
 
     def _init_mediapipe(self):
@@ -78,103 +82,14 @@ class PerceptionEngine:
                 )
             print("[PerceptionEngine] MediaPipe Hand Tracking initialized successfully.")
         except Exception as e:
-            print(f"[PerceptionEngine] MediaPipe init note ({e}). Using skin-color contour fallback.")
+            print(f"[PerceptionEngine] MediaPipe note ({e}). Using skin-contour fallback.")
             self.mp_hands = None
-
-    def _detect_color_objects(self, frame: np.ndarray) -> List[Dict[str, Any]]:
-        """
-        Specialized computer vision detectors for electronics, wires, breadboards, and gloves.
-        Ensures 100% recognition for items not in standard COCO 80 dataset.
-        """
-        h, w, _ = frame.shape
-        cv_detections: List[Dict[str, Any]] = []
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-
-        # 1. Red Wire / Positive Lead Detection
-        red_mask1 = cv2.inRange(hsv, np.array([0, 90, 70]), np.array([12, 255, 255]))
-        red_mask2 = cv2.inRange(hsv, np.array([168, 90, 70]), np.array([180, 255, 255]))
-        red_mask = cv2.bitwise_or(red_mask1, red_mask2)
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-        red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_OPEN, kernel, iterations=1)
-        red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_DILATE, kernel, iterations=2)
-
-        contours, _ = cv2.findContours(red_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        for cnt in contours:
-            area = cv2.contourArea(cnt)
-            if 150 < area < 40000:
-                rx, ry, rw, rh = cv2.boundingRect(cnt)
-                aspect = max(rw, rh) / max(1, min(rw, rh))
-                # Wire is typically elongated
-                if aspect > 1.8 or area > 400:
-                    cv_detections.append({
-                        "label": "wire_red",
-                        "bbox": [rx, ry, rx + rw, ry + rh],
-                        "confidence": 0.88,
-                        "display_name": "Red Wire",
-                        "color": (0, 0, 255),
-                    })
-
-        # 2. Black Wire / Negative Lead Detection
-        black_mask = cv2.inRange(hsv, np.array([0, 0, 0]), np.array([180, 110, 48]))
-        black_mask = cv2.morphologyEx(black_mask, cv2.MORPH_OPEN, kernel, iterations=1)
-        black_contours, _ = cv2.findContours(black_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        for cnt in black_contours:
-            area = cv2.contourArea(cnt)
-            if 180 < area < 30000:
-                bx, by, bw, bh = cv2.boundingRect(cnt)
-                aspect = max(bw, bh) / max(1, min(bw, bh))
-                if aspect > 2.0:
-                    cv_detections.append({
-                        "label": "wire_black",
-                        "bbox": [bx, by, bx + bw, by + bh],
-                        "confidence": 0.85,
-                        "display_name": "Black Wire",
-                        "color": (50, 50, 50),
-                    })
-
-        # 3. Breadboard / Electronic Circuit Board Detection (White/cream rectangular grid)
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
-        # Look for bright rectangular plate
-        _, thresh_white = cv2.threshold(blur, 175, 255, cv2.THRESH_BINARY)
-        board_contours, _ = cv2.findContours(thresh_white, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        for cnt in board_contours:
-            area = cv2.contourArea(cnt)
-            if 3500 < area < 120000:
-                bx, by, bw, bh = cv2.boundingRect(cnt)
-                aspect = float(bw) / max(1, bh)
-                if 0.5 <= aspect <= 2.2:
-                    cv_detections.append({
-                        "label": "breadboard",
-                        "bbox": [bx, by, bx + bw, by + bh],
-                        "confidence": 0.90,
-                        "display_name": "Breadboard",
-                        "color": (230, 230, 230),
-                    })
-
-        # 4. Blue / Nitrile Glove Detection
-        blue_mask = cv2.inRange(hsv, np.array([90, 70, 50]), np.array([135, 255, 255]))
-        blue_mask = cv2.morphologyEx(blue_mask, cv2.MORPH_OPEN, kernel, iterations=2)
-        glove_contours, _ = cv2.findContours(blue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        for cnt in glove_contours:
-            area = cv2.contourArea(cnt)
-            if 1500 < area < 100000:
-                gx, gy, gw, gh = cv2.boundingRect(cnt)
-                cv_detections.append({
-                    "label": "glove",
-                    "bbox": [gx, gy, gx + gw, gy + gh],
-                    "confidence": 0.94,
-                    "display_name": "Glove (Nitrile)",
-                    "color": (255, 140, 0),
-                })
-
-        return cv_detections
 
     def process_frame(
         self, frame: np.ndarray
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], bool, np.ndarray]:
         """
-        Process a single video frame with multi-modal detection and tracking.
+        Process frame for Everyday Desk Objects and Hands only.
         """
         if frame is None or frame.size == 0:
             return [], [], False, frame
@@ -183,13 +98,11 @@ class PerceptionEngine:
         annotated_frame = frame.copy()
         detected_objects: List[Dict[str, Any]] = []
         hands: List[Dict[str, Any]] = []
-        hands_gloved = False
         now = time.time()
 
-        # --- 1. YOLO Object Detection with Broad Class Aliasing ---
+        # --- 1. YOLO Object Detection (Desk Objects Whitelist Only) ---
         if self.yolo_model is not None:
             try:
-                # Pre-enhance frame contrast for robust low-light recognition
                 results = self.yolo_model(frame, verbose=False, conf=self.conf_threshold)
                 for res in results:
                     boxes = res.boxes
@@ -199,94 +112,78 @@ class PerceptionEngine:
                         conf = float(box.conf[0].item())
                         xyxy = [int(v) for v in box.xyxy[0].tolist()]
 
-                        # Full Semantic Aliasing Map
-                        clean_labels: List[Tuple[str, str, Tuple[int, int, int]]] = []
+                        clean_label = None
+                        display_name = None
+                        box_color = (0, 220, 100)
 
-                        # Person / Face
-                        if cls_name == "person":
-                            clean_labels.append(("person", "Human Operator", (255, 200, 0)))
-
-                        # Books / Notebooks / Manuals / Laptops / Flat Boards
-                        elif cls_name in ["book", "notebook"]:
-                            clean_labels.append(("book", "Notebook / Log", (0, 220, 100)))
+                        if cls_name in ["book", "notebook"]:
+                            clean_label = "book"
+                            display_name = "Notebook"
+                            box_color = (0, 220, 100)
                         elif cls_name in ["laptop", "keyboard", "tv", "monitor"]:
-                            clean_labels.append(("laptop", "Laptop", (0, 200, 150)))
-                            clean_labels.append(("book", "Notebook", (0, 220, 100)))
-                            clean_labels.append(("breadboard", "Breadboard Module", (220, 220, 220)))
-
-                        # Pens / Writing Tools / Stylus / Slender Tools
-                        elif cls_name in ["pen", "pencil", "toothbrush", "scissors", "knife", "fork", "spoon"]:
-                            clean_labels.append(("pen", "Pen / Stylus", (0, 255, 128)))
-                            clean_labels.append(("resistor", "Resistor / Component", (180, 180, 255)))
-                            clean_labels.append(("led", "LED Diode", (0, 255, 255)))
-
-                        # Bottles / Cups / Liquid Containers / Beakers
+                            clean_label = "laptop"
+                            display_name = "Laptop"
+                            box_color = (0, 200, 150)
+                        elif cls_name in ["pen", "pencil", "toothbrush", "scissors", "fork", "knife"]:
+                            clean_label = "pen"
+                            display_name = "Pen"
+                            box_color = (0, 255, 128)
                         elif cls_name in ["bottle", "wine glass", "vase"]:
-                            clean_labels.append(("bottle", "Sample Bottle", (0, 220, 100)))
-                            clean_labels.append(("cup", "Cup / Beaker", (0, 220, 150)))
+                            clean_label = "bottle"
+                            display_name = "Bottle"
+                            box_color = (0, 220, 100)
                         elif cls_name in ["cup", "bowl"]:
-                            clean_labels.append(("cup", "Cup / Container", (0, 220, 150)))
-                            clean_labels.append(("bottle", "Sample Bottle", (0, 220, 100)))
+                            clean_label = "cup"
+                            display_name = "Cup"
+                            box_color = (0, 220, 160)
+                        elif cls_name in ["cell phone", "phone", "remote"]:
+                            clean_label = "phone"
+                            display_name = "Phone"
+                            box_color = (0, 200, 255)
+                        elif cls_name in ["mouse"]:
+                            clean_label = "mouse"
+                            display_name = "Mouse"
+                            box_color = (0, 200, 255)
+                        elif cls_name in ["person"]:
+                            clean_label = "person"
+                            display_name = "Human"
+                            box_color = (255, 200, 0)
 
-                        # Phones / Batteries / Multimeters / Compact Tech
-                        elif cls_name in ["cell phone", "phone", "remote", "clock"]:
-                            clean_labels.append(("phone", "Mobile Device", (0, 200, 255)))
-                            clean_labels.append(("battery", "Battery Pack", (255, 120, 0)))
-                        elif cls_name == "mouse":
-                            clean_labels.append(("mouse", "Mouse", (0, 200, 255)))
-                            clean_labels.append(("battery", "Battery", (255, 120, 0)))
+                        # Filter out any non-desk items
+                        if clean_label is None:
+                            continue
 
-                        # Gloves
-                        elif cls_name == "glove":
-                            clean_labels.append(("glove", "Glove", (255, 165, 0)))
+                        detected_objects.append({
+                            "label": clean_label,
+                            "bbox": xyxy,
+                            "confidence": conf,
+                        })
 
-                        for lbl, disp, color in clean_labels:
-                            detected_objects.append({
-                                "label": lbl,
-                                "bbox": xyxy,
-                                "confidence": conf,
-                            })
-
-                            # Draw primary bounding box on video
-                            cv2.rectangle(annotated_frame, (xyxy[0], xyxy[1]), (xyxy[2], xyxy[3]), color, 2)
-                            label_tag = f"{disp} {conf:.2f}"
-                            t_size = cv2.getTextSize(label_tag, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)[0]
-                            cv2.rectangle(annotated_frame, (xyxy[0], xyxy[1] - 18), (xyxy[0] + t_size[0] + 6, xyxy[1]), (0, 0, 0), -1)
-                            cv2.putText(
-                                annotated_frame,
-                                label_tag,
-                                (xyxy[0] + 3, max(12, xyxy[1] - 4)),
-                                cv2.FONT_HERSHEY_SIMPLEX,
-                                0.45,
-                                color,
-                                1,
-                                cv2.LINE_AA,
-                            )
-            except Exception as e:
+                        # Draw bounding box and label badge
+                        cv2.rectangle(annotated_frame, (xyxy[0], xyxy[1]), (xyxy[2], xyxy[3]), box_color, 2)
+                        tag_text = f"{display_name} {conf:.2f}"
+                        t_sz = cv2.getTextSize(tag_text, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)[0]
+                        cv2.rectangle(
+                            annotated_frame,
+                            (xyxy[0], xyxy[1] - 18),
+                            (xyxy[0] + t_sz[0] + 6, xyxy[1]),
+                            (0, 0, 0),
+                            -1,
+                        )
+                        cv2.putText(
+                            annotated_frame,
+                            tag_text,
+                            (xyxy[0] + 3, max(12, xyxy[1] - 4)),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.45,
+                            box_color,
+                            1,
+                            cv2.LINE_AA,
+                        )
+            except Exception:
                 pass
 
-        # --- 2. Color & Geometric Feature Detectors (Electronics / Wires / Breadboards) ---
-        color_objs = self._detect_color_objects(frame)
-        for c_obj in color_objs:
-            detected_objects.append({
-                "label": c_obj["label"],
-                "bbox": c_obj["bbox"],
-                "confidence": c_obj["confidence"],
-            })
-            bx1, by1, bx2, by2 = c_obj["bbox"]
-            cv2.rectangle(annotated_frame, (bx1, by1), (bx2, by2), c_obj["color"], 2)
-            cv2.putText(
-                annotated_frame,
-                f"{c_obj['display_name']} {c_obj['confidence']:.2f}",
-                (bx1, max(15, by1 - 5)),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.45,
-                c_obj["color"],
-                1,
-                cv2.LINE_AA,
-            )
-
-        # --- 3. MediaPipe Hand Landmark Tracking & Biomechanical Grasp Inference ---
+        # --- 2. MediaPipe Hand Landmark Tracking & Pinch Grasp Estimation ---
         if self.mp_hands is not None:
             try:
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -305,12 +202,11 @@ class PerceptionEngine:
                         if mp_results.multi_handedness and len(mp_results.multi_handedness) > idx:
                             hand_type = mp_results.multi_handedness[idx].classification[0].label
 
-                        # Check pinch / writing grasp (thumb tip landmark 4 vs index tip landmark 8)
+                        # Pinch distance between thumb tip (4) and index finger tip (8)
                         thumb_tip = pts[4]
                         index_tip = pts[8]
-                        middle_tip = pts[12]
                         pinch_dist = math.hypot(thumb_tip[0] - index_tip[0], thumb_tip[1] - index_tip[1])
-                        is_grasping = pinch_dist < 55.0
+                        is_grasping = pinch_dist < 50.0
 
                         hand_info = {
                             "type": hand_type,
@@ -321,28 +217,23 @@ class PerceptionEngine:
                         }
                         hands.append(hand_info)
 
-                        # Emit hand interaction object
                         detected_objects.append({
                             "label": "hand",
                             "bbox": [x1, y1, x2, y2],
                             "confidence": 0.96,
                         })
 
-                        # If fingers in precision grasp, emit pen/tool candidate at fingertip
+                        # If user holds pen or pinches fingers, infer writing pen candidate
                         if is_grasping:
-                            fx, fy = int((thumb_tip[0] + index_tip[0]) / 2), int((thumb_tip[1] + index_tip[1]) / 2)
+                            fx = int((thumb_tip[0] + index_tip[0]) / 2)
+                            fy = int((thumb_tip[1] + index_tip[1]) / 2)
                             detected_objects.append({
                                 "label": "pen",
                                 "bbox": [fx - 25, fy - 25, fx + 25, fy + 25],
                                 "confidence": 0.92,
                             })
-                            detected_objects.append({
-                                "label": "resistor",
-                                "bbox": [fx - 20, fy - 20, fx + 20, fy + 20],
-                                "confidence": 0.85,
-                            })
 
-                        # Draw Hand Skeleton & Landmarks
+                        # Draw hand polygon
                         hull = cv2.convexHull(np.array(pts, dtype=np.int32))
                         hand_color = (0, 140, 255) if is_grasping else (0, 180, 255)
                         cv2.polylines(annotated_frame, [hull], True, hand_color, 2)
@@ -350,7 +241,7 @@ class PerceptionEngine:
                             cv2.circle(annotated_frame, pt, 2, (0, 255, 255), -1)
                         cv2.circle(annotated_frame, (int(cx), int(cy)), 5, (0, 140, 255), -1)
 
-                        status_tag = " [PINCH/GRASP]" if is_grasping else ""
+                        status_tag = " [HOLDING/PINCH]" if is_grasping else ""
                         cv2.putText(
                             annotated_frame,
                             f"Hand ({hand_type}){status_tag}",
@@ -361,10 +252,10 @@ class PerceptionEngine:
                             1,
                             cv2.LINE_AA,
                         )
-            except Exception as e:
+            except Exception:
                 pass
 
-        # --- 4. Fallback Skin-Color Hand Detector ---
+        # --- 3. Skin-Color Contour Fallback Hand Detector ---
         if len(hands) == 0:
             try:
                 ycrcb = cv2.cvtColor(frame, cv2.COLOR_BGR2YCrCb)
@@ -374,7 +265,7 @@ class PerceptionEngine:
                 skin_mask = cv2.morphologyEx(skin_mask, cv2.MORPH_DILATE, kernel, iterations=1)
 
                 contours, _ = cv2.findContours(skin_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                valid_contours = [c for c in contours if 1500 < cv2.contourArea(c) < 90000]
+                valid_contours = [c for c in contours if 1800 < cv2.contourArea(c) < 90000]
                 valid_contours = sorted(valid_contours, key=cv2.contourArea, reverse=True)[:2]
 
                 for cnt in valid_contours:
@@ -411,11 +302,10 @@ class PerceptionEngine:
                     orange_color = (0, 140, 255) if is_grasping else (0, 165, 255)
                     cv2.polylines(annotated_frame, [hull], True, orange_color, 2)
                     cv2.circle(annotated_frame, (int(cx), int(cy)), 5, orange_color, -1)
-            except Exception as e:
+            except Exception:
                 pass
 
-        # --- 5. Anti-Flicker Temporal Detection Persistence Buffer ---
-        # Update persistence buffer with fresh detections
+        # --- 4. Anti-Flicker Temporal Persistence Buffer ---
         current_labels = set()
         for det in detected_objects:
             lbl = det["label"]
@@ -426,7 +316,6 @@ class PerceptionEngine:
                 "last_seen": now,
             }
 
-        # Re-inject temporarily occluded objects if within persistence timeout
         for lbl, cached in list(self.persistence_buffer.items()):
             if lbl not in current_labels:
                 if (now - cached["last_seen"]) <= self.persistence_timeout_s:
@@ -438,7 +327,4 @@ class PerceptionEngine:
                 else:
                     self.persistence_buffer.pop(lbl, None)
 
-        if any(d["label"] == "glove" for d in detected_objects):
-            hands_gloved = True
-
-        return detected_objects, hands, hands_gloved, annotated_frame
+        return detected_objects, hands, False, annotated_frame
