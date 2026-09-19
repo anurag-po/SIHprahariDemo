@@ -1,1 +1,1 @@
-250ca2f519ab3eb311f9512e4719b96b46d2ac7bcafcd45cd0f87e929cfa0891  PRAHARI-v1.0.0-Windows-x64.zip
+e0eca7c9501e9d76fe73b5cb032cdf11f3132bf40314d69359dc75cac33f5eb3  PRAHARI-v1.0.0-Windows-x64.zip

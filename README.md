@@ -59,11 +59,8 @@ python tests/test_prahari_upgrade.py
 
 ### 3. Launch from Source
 ```powershell
-# Default experiment (Everyday Desk Objects)
+# Launch PRAHARI (Everyday Desk Objects Protocol)
 python src/main.py --config config/desk_objects_experiment.json
-
-# LED Circuit Continuity Test
-python src/main.py --config config/led_circuit_continuity_test.json
 
 # Headless mode (no GUI)
 python src/main.py --headless --no-voice
@@ -88,8 +85,7 @@ python src/main.py --headless --no-voice
 ```text
 SIHprahariDemo/
 ├── config/
-│   ├── desk_objects_experiment.json       # Desk objects experiment sequence & ROIs
-│   └── led_circuit_continuity_test.json   # LED breadboard circuit experiment
+│   └── desk_objects_experiment.json       # Mission protocol sequence & ROIs
 ├── models/
 │   └── yolov8n.pt                         # Bundled YOLOv8 object detector weights
 ├── src/

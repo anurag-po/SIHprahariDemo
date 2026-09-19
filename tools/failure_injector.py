@@ -31,7 +31,7 @@ from logger import SessionLogger
 
 
 class DigitalTwinFailureInjector:
-    def __init__(self, config_path: str = "config/led_circuit_continuity_test.json"):
+    def __init__(self, config_path: str = "config/desk_objects_experiment.json"):
         with open(config_path, "r", encoding="utf-8") as f:
             self.config = json.load(f)
         self.steps = self.config.get("steps", [])
@@ -45,7 +45,9 @@ class DigitalTwinFailureInjector:
 
         for step in self.steps:
             t += 2.0
-            event_type = step.get("event")
+            event_type = step.get("event", "")
+            if "|" in event_type:
+                event_type = event_type.split("|")[0].strip()
             req_objs = step.get("requires_objects", [])
             primary_obj = req_objs[0] if req_objs else "object"
             events.append({
@@ -143,8 +145,8 @@ class DigitalTwinFailureInjector:
         idx_late = n - 1
         idx_step_b = min(n - 1, 2)
         idx_step_a = min(n - 1, 1)
-        sub_idx = min(n - 1, max(0, n - 2))
-        sub_label = "unknown_item"
+        sub_idx = 1
+        sub_label = "wrong_object"
 
         test_cases = [
             ("Out of Sequence (Late Step Early)", *self.mutate_reorder_events(nominal, idx1=idx_early, idx2=idx_late), True),
