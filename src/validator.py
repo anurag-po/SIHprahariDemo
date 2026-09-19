@@ -42,7 +42,7 @@ class ExperimentValidator:
         self.current_status_banner = "Ready. Awaiting step 1."
         self.is_completed = False
         self.last_violation_time: Dict[int, float] = {}
-        self.violation_cooldown: float = 6.0
+        self.violation_cooldown: float = 10.0
         self.step_start_time: float = time.time()
 
         # Initial prompt announcement
@@ -56,9 +56,16 @@ class ExperimentValidator:
             self.voice.say_guidance(first_step.get("voice_prompt", f"Begin with {first_step['name']}."))
 
     def recite_protocol(self):
-        """Recite the complete protocol steps roadmap aloud."""
+        """Recite the current active step once aloud."""
         if self.voice:
-            self.voice.recite_steps(self.steps)
+            curr = self.get_current_expected_step()
+            if curr:
+                prompt = curr.get("voice_prompt", f"Step {curr['id']}: {curr['name'].replace('_', ' ')}")
+                self.voice.recite_single_step(curr.get("name", ""), prompt)
+            elif self.is_completed:
+                self.voice.say_guidance("All experiment protocol steps have been completed.", force=True)
+            else:
+                self.voice.recite_steps(self.steps)
 
     def get_expected_next_steps(self) -> List[int]:
         """Returns list of step IDs whose dependencies are fully satisfied but not yet completed."""

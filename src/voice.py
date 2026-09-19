@@ -1,7 +1,7 @@
 """
 High-Reliability Multi-Backend Voice Assistant for PRAHARI HAR Assistant.
 Uses native Windows SAPI / pyttsx3 on a dedicated worker thread with COM apartment initialization.
-Guarantees continuous speech output across all procedure steps, warnings, and alerts without hanging.
+Enforces strict 10-second spacing between speech events and single-shot recitation.
 """
 
 import os
@@ -10,7 +10,7 @@ import threading
 import queue
 import time
 import subprocess
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union, List
 
 
 class VoiceAssistant:
@@ -20,12 +20,19 @@ class VoiceAssistant:
         self.volume = volume
         self.msg_queue: queue.Queue = queue.Queue()
         self.running = True
+
+        # Rate limiting & spacing (10-second gap)
+        self.min_speech_gap: float = 10.0
+        self.last_speech_end_time: float = 0.0
         self.last_warning_key: Optional[str] = None
         self.last_warning_time: float = 0.0
-        self.warning_cooldown: float = 4.0
+        self.warning_cooldown: float = 10.0
         self._last_alert_text: Optional[str] = None
         self._last_alert_time: float = 0.0
         self._alert_cooldown: float = 10.0
+        self._last_guidance_text: Optional[str] = None
+        self._last_guidance_time: float = 0.0
+
         self.is_speaking: bool = False
         self.last_guidance_completed_time: float = time.time()
 
@@ -44,7 +51,6 @@ class VoiceAssistant:
                 pythoncom.CoInitialize()
                 has_com = True
                 sapi_voice = win32com.client.Dispatch("SAPI.SpVoice")
-                # SAPI rate ranges from -10 to 10 (default 0). Map 175 wpm -> rate 0..1
                 sapi_rate = max(-10, min(10, int((self.rate - 150) / 25)))
                 sapi_voice.Rate = sapi_rate
                 sapi_voice.Volume = int(self.volume * 100)
@@ -117,6 +123,7 @@ class VoiceAssistant:
 
             self.is_speaking = False
             now = time.time()
+            self.last_speech_end_time = now
             if msg_type == "guidance":
                 self.last_guidance_completed_time = now
 
@@ -129,12 +136,31 @@ class VoiceAssistant:
             except Exception:
                 pass
 
-    def say_guidance(self, text: str):
-        """Standard procedural instruction (normal priority)."""
+    def say_guidance(self, text: str, force: bool = False):
+        """
+        Procedural instruction with 10-second gap check between duplicate or rapid guidance.
+        """
+        now = time.time()
+        # Enforce 10-second spacing if identical or if previous speech just completed
+        if not force:
+            if (now - self.last_speech_end_time) < self.min_speech_gap and (text == self._last_guidance_text):
+                return
+            if (now - self._last_guidance_time) < self.min_speech_gap and (text == self._last_guidance_text):
+                return
+
+        self._last_guidance_text = text
+        self._last_guidance_time = now
+
+        # Clear duplicate queued items
+        with self.msg_queue.mutex:
+            self.msg_queue.queue.clear()
+
         self.msg_queue.put(("guidance", text))
 
     def say_alert(self, text_or_payload: Any):
-        """Immediate out-of-sequence or sequence violation alert with strict rate-limiting."""
+        """
+        Out-of-sequence or error alert with strict 10-second gap spacing.
+        """
         if isinstance(text_or_payload, dict):
             expected = text_or_payload.get("expected", "")
             detected = text_or_payload.get("detected", "")
@@ -144,41 +170,48 @@ class VoiceAssistant:
             spoken = f"Alert. {text_or_payload}"
 
         now = time.time()
-        # Prevent repeat alert storm / squeaking
-        if (now - self._last_alert_time) < self._alert_cooldown and spoken == self._last_alert_text:
+        # Strict 10-second gap between any error alerts or recent speech
+        if (now - self._last_alert_time) < self._alert_cooldown:
             return
-        if (now - self._last_alert_time) < 4.0:
+        if (now - self.last_speech_end_time) < self.min_speech_gap:
             return
 
         self._last_alert_text = spoken
         self._last_alert_time = now
 
-        # Prevent queue overflow
         with self.msg_queue.mutex:
-            if len(self.msg_queue.queue) > 2:
-                self.msg_queue.queue.clear()
+            self.msg_queue.queue.clear()
 
         self.msg_queue.put(("alert", spoken))
 
+    def recite_single_step(self, step_name: str, voice_prompt: Optional[str] = None):
+        """
+        Recites the step exactly ONCE without looping or continuous repetition.
+        """
+        spoken = voice_prompt if voice_prompt else f"Current required step: {step_name.replace('_', ' ')}."
+        # Force single-shot recitation
+        self.say_guidance(spoken, force=True)
+
     def recite_steps(self, steps_list: list):
-        """Recite the full sequence of experiment protocol steps aloud."""
+        """Recite summary roadmap once."""
         summary_items = []
         for s in steps_list:
             s_id = s.get("id", "")
             s_name = s.get("name", "").replace("_", " ").title()
             summary_items.append(f"Step {s_id}: {s_name}")
         full_text = "Protocol roadmap: " + ". ".join(summary_items) + "."
-        self.say_guidance(full_text)
+        self.say_guidance(full_text, force=True)
 
     def say_predictive_warning(self, target_roi: str, step_name: str, episode_id: Optional[str] = None):
         """
-        Predictive error warning before physical contact.
-        Rate-limited to 1 per episode.
+        Predictive error warning with strict 10-second gap spacing.
         """
         now = time.time()
         key = episode_id or f"{step_name}->{target_roi}"
-        if key == self.last_warning_key and (now - self.last_warning_time) < self.warning_cooldown:
-            return  # Rate-limited
+        if (now - self.last_warning_time) < self.warning_cooldown:
+            return
+        if (now - self.last_speech_end_time) < self.min_speech_gap:
+            return
 
         self.last_warning_key = key
         self.last_warning_time = now

@@ -26,9 +26,11 @@ wheels/
 # Heavy binary models & task files
 models/*.pt
 models/*.task
+*.pt
 
 # Logs & Recordings
 logs/*.jsonl
+logs/**/*.jsonl
 recordings/*.mp4
 
 # OS / IDE

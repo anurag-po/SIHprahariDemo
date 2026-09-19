@@ -25,7 +25,7 @@ try:
     from PyQt6.QtGui import QImage, QPixmap, QFont
     from PyQt6.QtWidgets import (
         QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-        QTextEdit, QProgressBar, QGroupBox, QCheckBox, QPushButton, QLineEdit
+        QTextEdit, QProgressBar, QGroupBox, QCheckBox, QPushButton, QLineEdit, QComboBox
     )
     HAS_PYQT = True
 except ImportError:
@@ -199,14 +199,39 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
 
         left_layout.addWidget(ip_cam_box)
 
-        # Stream Controls Row (Flip Camera, Advance Button, Recite Steps, Protocol Info)
+        # Stream Controls Row (Flip Camera, Rotate, Advance Button, Recite Steps, Protocol Info)
         controls_layout = QHBoxLayout()
-        self.flip_checkbox = QCheckBox("Flip Camera (Mirror View)")
+        self.flip_checkbox = QCheckBox("Flip Camera (Mirror)")
         self.flip_checkbox.setChecked(self.initial_flip)
         self.flip_checkbox.stateChanged.connect(self._on_flip_toggle)
         controls_layout.addWidget(self.flip_checkbox)
 
-        self.btn_recite = QPushButton("🔊 Recite Steps")
+        # Rotation Selector
+        self.rotation_combo = QComboBox()
+        self.rotation_combo.addItems(["Rotate: 0°", "Rotate: 90°", "Rotate: 180°", "Rotate: 270°"])
+        self.rotation_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #1a1a1a;
+                color: #e6e6e6;
+                border: 1px solid #333333;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-weight: bold;
+            }
+            QComboBox:hover {
+                border: 1px solid #00e676;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #1a1a1a;
+                color: #e6e6e6;
+                selection-background-color: #00e676;
+                selection-color: #000000;
+            }
+        """)
+        self.rotation_combo.currentIndexChanged.connect(self._on_rotation_changed)
+        controls_layout.addWidget(self.rotation_combo)
+
+        self.btn_recite = QPushButton("🔊 Recite Step")
         self.btn_recite.setStyleSheet("""
             QPushButton {
                 background-color: #1a1a1a;
@@ -374,7 +399,13 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
     def _on_recite_clicked(self):
         if self.validator:
             self.validator.recite_protocol()
-            self.append_log("VOICE: Reciting protocol roadmap aloud.")
+            self.append_log("VOICE: Recited current step once.")
+
+    def _on_rotation_changed(self, index: int):
+        angle = index * 90
+        if self.cap and hasattr(self.cap, "set_rotation"):
+            self.cap.set_rotation(angle)
+        self.append_log(f"CAMERA: Video Rotation set to {angle}°")
 
     def _on_flip_toggle(self, state):
         flip_enabled = (state == 2 or state == Qt.CheckState.Checked)
