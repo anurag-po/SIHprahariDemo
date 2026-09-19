@@ -7,11 +7,30 @@ voice alerts, structured JSONL logging, local MP4 recording/UDP streaming, and P
 
 import os
 import sys
+
+# Ensure stdout/stderr line-buffering in both console and frozen PyInstaller execution
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(line_buffering=True)
+    except Exception:
+        pass
+
+# Ensure PyTorch and OpenMP utilize multiple CPU threads in frozen executable (identical to terminal)
+_cpu_threads = str(max(1, (os.cpu_count() or 4) // 2))
+os.environ.setdefault("OMP_NUM_THREADS", _cpu_threads)
+os.environ.setdefault("MKL_NUM_THREADS", _cpu_threads)
+os.environ.setdefault("OPENBLAS_NUM_THREADS", _cpu_threads)
+
 import json
 import time
 import argparse
 import threading
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from capture import VideoCaptureThread
 from perception import PerceptionEngine

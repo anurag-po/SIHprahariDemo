@@ -58,15 +58,29 @@ def get_recordings_dir() -> str:
 def resolve_asset_path(relative_path: str) -> str:
     """
     Resolves an asset file path (e.g. 'models/yolov8n.pt', 'config/desk_objects_experiment.json').
-    Checks app root first, then current working directory.
+    Checks comprehensively across:
+    1. sys._MEIPASS (PyInstaller onedir/onefile bundle)
+    2. Directory of executable (dist/PRAHARI root)
+    3. _internal subfolder under executable directory
+    4. Project source root (parent of src/)
+    5. Current Working Directory (CWD)
     """
-    app_root = get_app_root()
-    candidate = os.path.join(app_root, relative_path)
-    if os.path.exists(candidate):
-        return os.path.abspath(candidate)
+    candidates = []
+    if getattr(sys, "frozen", False):
+        if hasattr(sys, "_MEIPASS"):
+            candidates.append(os.path.join(sys._MEIPASS, relative_path))
+        exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+        candidates.append(os.path.join(exe_dir, relative_path))
+        candidates.append(os.path.join(exe_dir, "_internal", relative_path))
 
-    # Fallback to CWD
-    if os.path.exists(relative_path):
-        return os.path.abspath(relative_path)
+    src_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates.append(os.path.abspath(os.path.join(src_dir, "..", relative_path)))
+    candidates.append(os.path.abspath(relative_path))
+    candidates.append(os.path.abspath(os.path.join(os.getcwd(), relative_path)))
 
-    return os.path.abspath(candidate)
+    for cand in candidates:
+        if os.path.exists(cand):
+            return os.path.abspath(cand)
+
+    return os.path.abspath(candidates[0] if candidates else relative_path)
+

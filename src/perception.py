@@ -232,7 +232,7 @@ class PerceptionEngine:
         # --- 1. YOLO Object Detection with Refined Aliasing & Borders ---
         if self.yolo_model is not None:
             try:
-                results = self.yolo_model(frame, verbose=False, conf=self.conf_threshold)
+                results = self.yolo_model(frame, verbose=False, conf=self.conf_threshold, device="cpu")
                 for res in results:
                     boxes = res.boxes
                     for box in boxes:

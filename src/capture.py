@@ -599,6 +599,8 @@ def open_camera(cam_cfg: Optional[Union[Dict[str, Any], int, str]] = None) -> Op
         except Exception as e:
             print(f"[open_camera] DirectShow initialization fallback ({device_index}): {e}")
             cap = cv2.VideoCapture(device_index)
+        if cap and cap.isOpened():
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         return cap
 
     elif cam_type == "ip":
@@ -833,6 +835,7 @@ class VideoCaptureThread:
                 self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
                 self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
                 self.cap.set(cv2.CAP_PROP_FPS, self.fps)
+                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 ret, frame = self.cap.read()
                 if ret and frame is not None:
                     self.latest_frame = frame
