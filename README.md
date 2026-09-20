@@ -4,6 +4,8 @@
 
 PRAHARI is an offline, edge-running computer vision desktop application designed to assist operators performing multi-step physical experiments (such as space payload rack procedures).
 
+> **Note:** If the Mobile Phone Bridge camera source isn't connecting, see [If Mobile Bridge isn't working](#if-mobile-bridge-isnt-working) at the bottom of this README for a step-by-step fix.
+
 ---
 
 ## How to Run the Project Using Git Clone (Quickstart)
@@ -63,15 +65,15 @@ python src/main.py --headless --no-voice
 
 ---
 
-##  Camera & Vision Input Selection
+## Camera & Vision Input Selection
 
 PRAHARI features a dedicated **Camera Source Selection Panel** right in the desktop application:
 
 | Camera Mode | Button | Description |
 | :--- | :--- | :--- |
-| **Local USB Webcam** | ` Web Camera` | Connects instantly to your built-in webcam or external USB camera (device index 0, 1, ...). |
-| **Network IP Camera** | ` IP Camera` | Connects to an RTSP, HTTP MJPEG, or snapshot stream (e.g. `http://192.168.1.50:8080/video` or `rtsp://...`). |
-| **Mobile Phone Bridge** | ` Mobile Phone Bridge` | Starts an in-process zero-install web server on port 8000. Open the displayed URL (`http://<LAN-IP>:8000`) on your phone's Chrome browser to stream live video directly to PRAHARI. |
+| **Local USB Webcam** | `Web Camera` | Connects instantly to your built-in webcam or external USB camera (device index 0, 1, ...). |
+| **Network IP Camera** | `IP Camera` | Connects to an RTSP, HTTP MJPEG, or snapshot stream (e.g. `http://192.168.1.50:8080/video` or `rtsp://...`). |
+| **Mobile Phone Bridge** | `Mobile Phone Bridge` | Starts an in-process zero-install web server on port 8000. Open the displayed URL (`http://<LAN-IP>:8000`) on your phone's Chrome browser to stream live video directly to PRAHARI. |
 
 ### Stream Controls:
 - **Flip Camera (Mirror)**: Horizontally flip camera video.
@@ -104,7 +106,7 @@ python tests/test_packaging.py
 
 ---
 
-##  Repository Structure
+## Repository Structure
 
 ```text
 SIHprahariDemo/
@@ -151,9 +153,27 @@ SIHprahariDemo/
 
 ---
 
-##  Security & Data Paths
+## Security & Data Paths
 
 When running the application:
 - **Application Binaries & Assets**: Loaded from installation/project root (`models/`, `config/`).
 - **Audit Logs**: Stored under `%LOCALAPPDATA%\PRAHARI\logs\`.
 - **Session MP4 Recordings**: Stored under `%LOCALAPPDATA%\PRAHARI\recordings\`.
+
+---
+
+## If Mobile Bridge isn't working
+
+The Mobile Phone Bridge streams video from your phone's browser to PRAHARI over your local network using a plain `http://` address (not `https://`). Modern versions of Chrome treat camera access on insecure (non-HTTPS) origins as unsafe by default, so your phone may refuse to grant camera permission even though the connection itself is working fine. If the stream won't start, follow these steps:
+
+1. On the phone (or device) you're using to stream, open Chrome and go to:
+   ```
+   chrome://flags/#unsafely-treat-insecure-origin-as-secure
+   ```
+2. In the text box for that flag, enter the exact URL shown on the PRAHARI desktop client for the Mobile Phone Bridge (e.g. `http://<LAN-IP>:8000`).
+3. Set the flag to **Enabled**, then use the **Relaunch** button that appears to restart Chrome.
+4. After Chrome relaunches, go to the same Mobile Phone Bridge URL from the desktop client again.
+5. When prompted, **allow camera access** for the page.
+6. The live stream should now reach PRAHARI as expected — proceed with your session.
+
+**Important:** This flag disables a browser security protection for the origin you entered. Once you're done with the demonstration or session, go back to `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, reset it to **Default**, and relaunch Chrome to remove the exception.
