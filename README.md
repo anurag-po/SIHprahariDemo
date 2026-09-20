@@ -63,7 +63,7 @@ python src/main.py --headless --no-voice
 
 ---
 
-## 📹 Camera & Vision Input Selection
+##  Camera & Vision Input Selection
 
 PRAHARI features a dedicated **Camera Source Selection Panel** right in the desktop application:
 
@@ -76,8 +76,8 @@ PRAHARI features a dedicated **Camera Source Selection Panel** right in the desk
 ### Stream Controls:
 - **Flip Camera (Mirror)**: Horizontally flip camera video.
 - **Rotate Selector**: 0°, 90°, 180°, 270° orientation adjustments for phone or mounted webcams.
-- **🔊 Recite Step**: Single-shot voice prompt recitation of the current active protocol step.
-- **⏭ Advance Step**: Manual override or spacebar trigger for workflow testing.
+- **Recite Step**: Single-shot voice prompt recitation of the current active protocol step.
+- **Advance Step**: Manual override or spacebar trigger for workflow testing.
 
 ---
 
