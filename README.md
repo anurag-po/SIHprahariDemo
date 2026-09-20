@@ -1,6 +1,6 @@
 # PRAHARI
 
-**AI-Based Human Activity Recognition (HAR) System for On-Board Space Experiment Assistance**
+**Procedural Real-time AI for Human Activity Recognition and Inspection**
 
 PRAHARI is an offline, edge-running computer vision desktop application designed to assist operators performing multi-step physical experiments (such as space payload rack procedures).
 
