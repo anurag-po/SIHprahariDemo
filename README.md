@@ -56,6 +56,12 @@ Double-click **`setup.bat`** or execute:
 ```
 *(This verifies dependencies, model weights, and launches PRAHARI automatically).*
 
+#### Option A-2: Execute (Windows_
+Execute:
+```powershell
+python src/main.py
+```
+
 #### Option B: 1-Click Batch Launcher (Windows)
 Double-click **`run_prahari.bat`** or execute:
 ```powershell
