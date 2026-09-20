@@ -285,16 +285,16 @@ class ObjectTracker:
                         "timestamp": now,
                     })
 
-        # --- Check 5-Second Pen + Book / Notebook Colocation Interaction ---
+        # --- Check 3-Second Pen + Book / Notebook Colocation Interaction ---
         pen_obj = self.objects.get("pen")
-        book_obj = self.objects.get("book") or self.objects.get("laptop")
+        book_obj = self.objects.get("book") or self.objects.get("notebook") or self.objects.get("laptop")
         interacting = False
 
         if pen_obj:
             pen_time_ok = (now - pen_obj.last_seen_time) < 1.0
             if pen_time_ok:
                 pen_center = pen_obj.current_centroid
-                # Case 1: Both pen and book are present and interacting
+                # Case 1: Both pen and book/notebook are present and interacting
                 if book_obj and (now - book_obj.last_seen_time) < 1.0:
                     book_center = book_obj.current_centroid
                     both_in_log = ("log_zone" in pen_obj.current_rois) or ("log_zone" in book_obj.current_rois)
@@ -305,8 +305,8 @@ class ObjectTracker:
                                          self.box_overlap_ratio(pen_obj.current_bbox, book_obj.current_bbox) > 0.08)
                     if both_in_log or boxes_overlap or dist < 220.0:
                         interacting = True
-                # Case 2: Pen is interacting inside the log_zone (where notebook is expected)
-                elif "log_zone" in pen_obj.current_rois or pen_obj.state in ["stationary", "in_hand"]:
+                # Case 2: Pen is interacting inside the log_zone (where notebook is located)
+                elif "log_zone" in pen_obj.current_rois:
                     interacting = True
 
         if interacting:
@@ -314,8 +314,16 @@ class ObjectTracker:
                 self.pen_book_interaction_start = now
                 self.pen_book_colocation_emitted = False
             duration = now - self.pen_book_interaction_start
-            if duration >= 5.0 and not self.pen_book_colocation_emitted:
+            if duration >= 3.0 and not self.pen_book_colocation_emitted:
                 self.pen_book_colocation_emitted = True
+                emitted_events.append({
+                    "type": "pen_book_colocation:log_zone:3s",
+                    "object": "pen",
+                    "roi": "log_zone",
+                    "confidence": 0.95,
+                    "timestamp": now,
+                    "centroid": pen_obj.current_centroid if pen_obj else (320, 240),
+                })
                 emitted_events.append({
                     "type": "pen_book_colocation:log_zone:5s",
                     "object": "pen",

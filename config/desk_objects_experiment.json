@@ -51,11 +51,11 @@
     },
     {
       "id": 3,
-      "name": "write_log_entry",
-      "requires_objects": ["pen"],
-      "event": "object_stationary_in_roi:pen:log_zone|pen_book_colocation:log_zone:5s",
+      "name": "hold_pen_and_notebook_together",
+      "requires_objects": ["pen", "book"],
+      "event": "pen_book_colocation:log_zone:3s|pen_book_colocation:log_zone:5s|pen_book_together:log_zone:3s",
       "depends_on": [2],
-      "voice_prompt": "Step 3: Write the log entry by holding the pen over the notebook.",
+      "voice_prompt": "Step 3: Hold the pen and notebook together in the log zone for 3 seconds.",
       "severity": 0.6,
       "irreversible": false,
       "verification": {
