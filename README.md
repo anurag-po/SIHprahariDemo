@@ -1,10 +1,21 @@
 # PRAHARI
 
-**Procedural Real-time AI for Human Activity Recognition and Inspection**
+**AI-Based Human Activity Recognition (HAR) System for On-Board Space Experiment Assistance**
 
 PRAHARI is an offline, edge-running computer vision desktop application designed to assist operators performing multi-step physical experiments (such as space payload rack procedures).
 
 > **Note:** If the Mobile Phone Bridge camera source isn't connecting, see [If Mobile Bridge isn't working](#if-mobile-bridge-isnt-working) at the bottom of this README for a step-by-step fix.
+
+---
+
+## Table of Contents
+- [How to Run the Project Using Git Clone (Quickstart)](#how-to-run-the-project-using-git-clone-quickstart)
+- [Camera & Vision Input Selection](#camera--vision-input-selection)
+- [Accessing an IP Camera](#accessing-an-ip-camera)
+- [Developer & Source Workflow](#developer--source-workflow)
+- [Repository Structure](#repository-structure)
+- [Security & Data Paths](#security--data-paths)
+- [If Mobile Bridge isn't working](#if-mobile-bridge-isnt-working)
 
 ---
 
@@ -80,6 +91,36 @@ PRAHARI features a dedicated **Camera Source Selection Panel** right in the desk
 - **Rotate Selector**: 0°, 90°, 180°, 270° orientation adjustments for phone or mounted webcams.
 - **Recite Step**: Single-shot voice prompt recitation of the current active protocol step.
 - **Advance Step**: Manual override or spacebar trigger for workflow testing.
+
+---
+
+## Accessing an IP Camera
+
+If you're streaming from a dedicated IP camera, a networked CCTV unit, or an IP-camera app on a phone (instead of the Mobile Phone Bridge), you can feed that stream straight into PRAHARI using its feed link.
+
+### Step 1: Find your camera's feed URL
+Most IP cameras and IP-camera apps expose a live feed URL once they're running, usually in one of these formats:
+- **HTTP MJPEG stream**: `http://192.168.1.50:8080/video`
+- **HTTP snapshot stream**: `http://192.168.1.50:8080/shot.jpg`
+- **RTSP stream**: `rtsp://192.168.1.50:8554/live`
+
+This URL is normally shown on the camera's own status page or app screen. Make sure the camera and the computer running PRAHARI are on the same local network (Wi-Fi/LAN).
+
+### Step 2: Enter it into PRAHARI
+1. Launch PRAHARI and open the **Camera Source Selection Panel**.
+2. Click the **`IP Camera`** button.
+3. An input bar will appear — paste the full feed URL from Step 1 into this bar.
+4. Press **Enter** (or click **Connect**) to start the stream.
+
+You can also skip the GUI and pass the URL directly at launch:
+```bash
+python src/main.py --camera-type ip --ip-url http://192.168.1.50:8080/video
+```
+
+### Tips
+- Always include the scheme (`http://` or `rtsp://`) and the port number exactly as shown by the camera or app.
+- If the stream doesn't connect, confirm the camera and computer are on the same network and that no firewall is blocking the port.
+- Use the **Rotate Selector** and **Flip Camera** controls (see above) if the feed appears sideways or mirrored.
 
 ---
 
