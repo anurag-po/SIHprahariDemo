@@ -99,28 +99,27 @@
     },
     {
       "id": 6,
-      "name": "inspect_seal_dwell",
-      "requires_objects": ["bottle"],
-      "event": "dwell_object:bottle:storage_zone:2s|dwell_object:bottle:staging_zone:2s",
+      "name": "bring_cup_to_log_zone",
+      "requires_objects": ["cup"],
+      "event": "object_in_roi:cup:log_zone|object_stationary_in_roi:cup:log_zone|object_in_roi:bottle:log_zone",
       "depends_on": [5],
-      "voice_prompt": "Step 6: Hold the bottle steady for two seconds for inspection.",
-      "severity": 0.8,
+      "voice_prompt": "Step 6: Bring the cup to the log zone.",
+      "severity": 0.7,
       "irreversible": false,
       "verification": {
-        "mode": "vision+brightness",
-        "target_roi": "storage_zone",
-        "brightness_delta_threshold": 6.0
+        "mode": "vision_only",
+        "signal": null
       },
-      "expected_targets": ["storage_zone"],
-      "confusable_targets": []
+      "expected_targets": ["log_zone"],
+      "confusable_targets": ["staging_zone", "storage_zone"]
     },
     {
       "id": 7,
-      "name": "stow_sealed_bottle",
-      "requires_objects": ["bottle"],
-      "event": "object_stationary_in_roi:bottle:storage_zone|object_in_roi:bottle:storage_zone",
+      "name": "bring_cup_log_to_storage",
+      "requires_objects": ["cup"],
+      "event": "object_transferred:cup:log_to_storage|object_in_roi:cup:storage_zone|object_stationary_in_roi:cup:storage_zone|object_transferred:bottle:log_to_storage|object_in_roi:bottle:storage_zone",
       "depends_on": [6],
-      "voice_prompt": "Step 7: Confirm the bottle is placed in the storage zone to complete protocol.",
+      "voice_prompt": "Step 7: Bring the cup from the log zone to the storage zone to complete protocol.",
       "severity": 0.5,
       "irreversible": false,
       "verification": {
@@ -128,7 +127,7 @@
         "signal": null
       },
       "expected_targets": ["storage_zone"],
-      "confusable_targets": ["log_zone"]
+      "confusable_targets": ["staging_zone", "log_zone"]
     }
   ]
 }

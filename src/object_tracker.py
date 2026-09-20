@@ -237,6 +237,17 @@ class ObjectTracker:
                         "centroid": centroid,
                     })
 
+                # Check transfer from log to storage
+                if r_name == "storage_zone" and "log_zone" in obj.visited_rois:
+                    emitted_events.append({
+                        "type": f"object_transferred:{label}:log_to_storage",
+                        "object": label,
+                        "roi": "storage_zone",
+                        "confidence": conf,
+                        "timestamp": now,
+                        "centroid": centroid,
+                    })
+
                 # 2. object_stationary_in_roi
                 if obj.state == "stationary" and obj.frames_stationary >= 3:
                     stat_event_key = f"object_stationary_in_roi:{label}:{r_name}"
