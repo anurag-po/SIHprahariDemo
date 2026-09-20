@@ -48,6 +48,9 @@ class TestPackagingAndPaths(unittest.TestCase):
 
     def test_asset_resolution(self):
         """Test that essential models and configs resolve correctly."""
+        user_models_dir = paths.get_user_models_dir()
+        self.assertTrue(os.path.exists(user_models_dir), f"User models dir missing: {user_models_dir}")
+
         yolo_path = paths.resolve_asset_path("models/yolov8n.pt")
         self.assertTrue(os.path.exists(yolo_path), f"YOLO model not found: {yolo_path}")
 
@@ -61,6 +64,15 @@ class TestPackagingAndPaths(unittest.TestCase):
             cfg = json.load(f)
             self.assertIn("experiment_id", cfg)
             self.assertIn("steps", cfg)
+
+    def test_model_downloader(self):
+        """Test setup_models verifies and returns valid model paths."""
+        from download_models import setup_models
+        models = setup_models()
+        self.assertIn("yolo", models)
+        self.assertIn("hand_landmarker", models)
+        self.assertTrue(os.path.exists(models["yolo"]))
+        self.assertTrue(os.path.exists(models["hand_landmarker"]))
 
     def test_camera_mode_switching(self):
         """Test that VideoCaptureThread supports switching between USB index and IP URL."""

@@ -11,11 +11,13 @@ src_dir = os.path.join(repo_root, "src")
 models_dir = os.path.join(repo_root, "models")
 config_dir = os.path.join(repo_root, "config")
 
-datas = []
-if os.path.exists(models_dir):
-    datas.append((models_dir, 'models'))
-if os.path.exists(config_dir):
-    datas.append((config_dir, 'config'))
+os.makedirs(models_dir, exist_ok=True)
+os.makedirs(config_dir, exist_ok=True)
+
+datas = [
+    (models_dir, 'models'),
+    (config_dir, 'config'),
+]
 
 hiddenimports = [
     'PyQt6',

@@ -117,11 +117,15 @@ class PerceptionEngine:
             from ultralytics import YOLO
             resolved_path = resolve_asset_path(self.model_path)
             if not os.path.exists(resolved_path):
-                root_path = os.path.join(os.path.dirname(__file__), "..", "yolov8n.pt")
-                if os.path.exists(root_path):
-                    resolved_path = root_path
-                else:
-                    resolved_path = "yolov8n.pt"
+                # Check models/yolov8n.pt specifically
+                resolved_path = resolve_asset_path("models/yolov8n.pt")
+            
+            if not os.path.exists(resolved_path):
+                raise FileNotFoundError(
+                    f"YOLO model weights not found at '{resolved_path}'. "
+                    f"Please run setup_models() to download models/yolov8n.pt."
+                )
+
             self.yolo_model = YOLO(resolved_path)
             print(f"[PerceptionEngine] YOLO detector loaded ({resolved_path}).")
         except Exception as e:
@@ -134,10 +138,6 @@ class PerceptionEngine:
             from mediapipe.tasks.python import BaseOptions
             from mediapipe.tasks.python import vision
             task_path = resolve_asset_path("models/hand_landmarker.task")
-            if not os.path.exists(task_path):
-                root_task = os.path.join(os.path.dirname(__file__), "..", "models", "hand_landmarker.task")
-                if os.path.exists(root_task):
-                    task_path = root_task
 
             if os.path.exists(task_path):
                 options = vision.HandLandmarkerOptions(

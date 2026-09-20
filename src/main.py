@@ -248,6 +248,23 @@ class PrahariApplication:
 def main():
     args = parse_arguments()
 
+    # 1. Deterministic Model Setup / Acquisition
+    try:
+        from download_models import setup_models
+        setup_models()
+    except Exception as e:
+        print(f"[FATAL] Model acquisition failed: {e}", file=sys.stderr)
+        if HAS_PYQT and not args.headless:
+            _err_app = QApplication.instance() or QApplication(sys.argv)
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(
+                None,
+                "PRAHARI - Model Acquisition Error",
+                f"Required AI models could not be found or downloaded:\n\n{e}\n\n"
+                f"Please ensure internet access on first launch or place 'yolov8n.pt' in the models directory."
+            )
+        sys.exit(1)
+
     if args.headless or not HAS_PYQT:
         app_engine = PrahariApplication(args)
         app_engine.start()

@@ -55,26 +55,46 @@ def get_recordings_dir() -> str:
     return rec_path
 
 
+def get_user_models_dir() -> str:
+    r"""Returns path to the user-writable models directory (%LOCALAPPDATA%\PRAHARI\models)."""
+    models_path = os.path.join(get_user_data_dir(), "models")
+    os.makedirs(models_path, exist_ok=True)
+    return models_path
+
+
 def resolve_asset_path(relative_path: str) -> str:
-    """
+    r"""
     Resolves an asset file path (e.g. 'models/yolov8n.pt', 'config/desk_objects_experiment.json').
     Checks comprehensively across:
     1. sys._MEIPASS (PyInstaller onedir/onefile bundle)
     2. Directory of executable (dist/PRAHARI root)
     3. _internal subfolder under executable directory
-    4. Project source root (parent of src/)
-    5. Current Working Directory (CWD)
+    4. User data & model directory (%LOCALAPPDATA%\PRAHARI\models)
+    5. Project source root (parent of src/)
+    6. Current Working Directory (CWD)
     """
     candidates = []
+
+    # 1. PyInstaller Frozen bundle candidates
     if getattr(sys, "frozen", False):
         if hasattr(sys, "_MEIPASS"):
             candidates.append(os.path.join(sys._MEIPASS, relative_path))
         exe_dir = os.path.dirname(os.path.abspath(sys.executable))
-        candidates.append(os.path.join(exe_dir, relative_path))
         candidates.append(os.path.join(exe_dir, "_internal", relative_path))
+        candidates.append(os.path.join(exe_dir, relative_path))
 
+    # 2. Project source root (parent of src/)
     src_dir = os.path.dirname(os.path.abspath(__file__))
     candidates.append(os.path.abspath(os.path.join(src_dir, "..", relative_path)))
+
+    # 3. User-writable models and data directory (%LOCALAPPDATA%\PRAHARI)
+    norm_rel = relative_path.replace("\\", "/")
+    if norm_rel.startswith("models/"):
+        filename = os.path.basename(relative_path)
+        candidates.append(os.path.join(get_user_models_dir(), filename))
+    candidates.append(os.path.join(get_user_data_dir(), relative_path))
+
+    # 4. Relative to current working directory
     candidates.append(os.path.abspath(relative_path))
     candidates.append(os.path.abspath(os.path.join(os.getcwd(), relative_path)))
 
