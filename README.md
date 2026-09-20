@@ -6,6 +6,7 @@ PRAHARI is an offline, edge-running computer vision desktop application designed
 
 > **Note:** If the Mobile Phone Bridge camera source isn't connecting, see [If Mobile Bridge isn't working](#if-mobile-bridge-isnt-working) at the bottom of this README for a step-by-step fix.
 
+> **Note:** For an easier explanation of our project, check out the explanation video on youtube : [Link To YouTube Video](https://youtu.be/jV00Wzg49_k)
 ---
 
 ## Table of Contents
