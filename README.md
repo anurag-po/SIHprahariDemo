@@ -56,8 +56,8 @@ Double-click **`setup.bat`** or execute:
 ```
 *(This verifies dependencies, model weights, and launches PRAHARI automatically).*
 
-#### Option A-2: Execute (Windows_
-Execute:
+#### Option A-2: Execute Python Directly (Windows)
+In the terminal inside repo execute:
 ```powershell
 python src/main.py
 ```
