@@ -52,8 +52,14 @@ except ImportError:
     PrahariMainWindow = None
 
 
+try:
+    from version import __version__
+except ImportError:
+    __version__ = "1.0.0"
+
+
 def parse_arguments():
-    parser = argparse.ArgumentParser(description="PRAHARI Mission HAR Space Experiment Assistant")
+    parser = argparse.ArgumentParser(description=f"PRAHARI Mission HAR Space Experiment Assistant (v{__version__})")
     parser.add_argument(
         "--config",
         type=str,
@@ -61,12 +67,21 @@ def parse_arguments():
         help="Path to experiment step sequence JSON configuration",
     )
     parser.add_argument("--camera", type=int, default=0, help="Webcam device index")
+    parser.add_argument(
+        "--camera-type",
+        type=str,
+        default=None,
+        choices=["usb", "ip", "browser"],
+        help="Initial camera source mode: 'usb' (webcam), 'ip' (network stream), or 'browser' (phone bridge)",
+    )
+    parser.add_argument("--ip-url", type=str, default=None, help="Network IP Camera stream URL (RTSP / HTTP MJPEG)")
     parser.add_argument("--video-file", type=str, default=None, help="Path to offline video file for replay")
     parser.add_argument("--stream-ip", type=str, default=None, help="Target IP for low-latency UDP stream")
     parser.add_argument("--stream-port", type=int, default=5000, help="Target UDP port")
     parser.add_argument("--flip", action="store_true", help="Flip camera horizontally for mirror view")
     parser.add_argument("--no-voice", action="store_true", help="Disable text-to-speech audio output")
     parser.add_argument("--headless", action="store_true", help="Run without graphical user interface")
+    parser.add_argument("--version", action="version", version=f"PRAHARI v{__version__}")
     return parser.parse_args()
 
 
@@ -125,8 +140,15 @@ class PrahariApplication:
         self.risk_engine = RiskEngine(rois=self.rois, risk_threshold=0.5)
 
         # 5. Capture & Streamer
+        if args.camera_type == "ip" or args.ip_url:
+            cam_source = args.ip_url if args.ip_url else "http://192.168.1.50:8080/video"
+        elif args.camera_type == "browser":
+            cam_source = "browser"
+        else:
+            cam_source = args.camera
+
         self.capture = VideoCaptureThread(
-            source=args.camera,
+            source=cam_source,
             video_file=args.video_file,
             flip_horizontal=args.flip,
         )
@@ -229,6 +251,8 @@ def main():
     if args.headless or not HAS_PYQT:
         app_engine = PrahariApplication(args)
         app_engine.start()
+        if not args.no_voice:
+            app_engine.validator.announce_initial_step()
         if not HAS_PYQT and not args.headless:
             print("[PRAHARI] PyQt6 not installed. Running in console headless mode.")
         print("[PRAHARI] Running in headless mode. Press Ctrl+C to stop.")
@@ -254,6 +278,14 @@ def main():
         app_engine.gui_window = gui_window
         gui_window.show()
         app_engine.start()
+
+        # Voice command ONLY starts after setting and rendering the GUI
+        if not args.no_voice:
+            try:
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(700, app_engine.validator.announce_initial_step)
+            except Exception:
+                app_engine.validator.announce_initial_step()
 
         try:
             sys.exit(qt_app.exec())

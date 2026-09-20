@@ -33,6 +33,7 @@ hiddenimports = [
     'win32com',
     'win32com.client',
     'paths',
+    'version',
     'capture',
     'perception',
     'object_tracker',

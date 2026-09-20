@@ -157,78 +157,43 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
         cam_source_layout.setContentsMargins(8, 6, 8, 8)
         cam_source_layout.setSpacing(6)
 
-        # Button row: Web Camera vs IP Camera vs Phone Bridge
+        # Primary Mode Switch Buttons: Web Camera vs IP Camera vs Mobile Bridge
         cam_btn_row = QHBoxLayout()
         cam_btn_row.setSpacing(8)
 
         self.btn_webcam = QPushButton("📹 Web Camera")
-        self.btn_webcam.setToolTip("Switch to local USB Webcam / Built-in Camera")
-        self.btn_webcam.setStyleSheet("""
-            QPushButton {
-                background-color: #1e3a29;
-                color: #00e676;
-                border: 1px solid #00e676;
-                font-weight: bold;
-                padding: 6px 14px;
-                border-radius: 4px;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background-color: #00e676;
-                color: #000000;
-            }
-        """)
+        self.btn_webcam.setToolTip("Set camera to local USB Webcam / Built-in Camera")
+        self.btn_webcam.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_webcam.clicked.connect(self._on_select_webcam)
         cam_btn_row.addWidget(self.btn_webcam)
 
         self.btn_ipcam = QPushButton("🌐 IP Camera")
-        self.btn_ipcam.setToolTip("Switch to network IP Camera (RTSP / HTTP / MJPEG stream)")
-        self.btn_ipcam.setStyleSheet("""
-            QPushButton {
-                background-color: #2a2010;
-                color: #ff9800;
-                border: 1px solid #ff9800;
-                font-weight: bold;
-                padding: 6px 14px;
-                border-radius: 4px;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background-color: #ff9800;
-                color: #000000;
-            }
-        """)
+        self.btn_ipcam.setToolTip("Set camera to Network IP Camera (RTSP / HTTP MJPEG stream)")
+        self.btn_ipcam.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_ipcam.clicked.connect(self._on_select_ip_cam)
         cam_btn_row.addWidget(self.btn_ipcam)
 
         self.btn_bridge = QPushButton("📱 Mobile Phone Bridge")
         self.btn_bridge.setToolTip("Stream live video from phone Chrome browser without installing apps")
-        self.btn_bridge.setStyleSheet("""
-            QPushButton {
-                background-color: #1a2332;
-                color: #58a6ff;
-                border: 1px solid #58a6ff;
-                font-weight: bold;
-                padding: 6px 14px;
-                border-radius: 4px;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background-color: #58a6ff;
-                color: #000000;
-            }
-        """)
+        self.btn_bridge.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_bridge.clicked.connect(self._on_select_mobile_bridge)
         cam_btn_row.addWidget(self.btn_bridge)
 
         cam_source_layout.addLayout(cam_btn_row)
 
-        # Input & Status Row
-        cam_input_row = QHBoxLayout()
-        cam_input_row.setSpacing(6)
+        # Input & Configuration Row (Dynamically changes based on active camera mode)
+        self.cam_config_widget = QWidget()
+        cam_config_layout = QHBoxLayout(self.cam_config_widget)
+        cam_config_layout.setContentsMargins(0, 0, 0, 0)
+        cam_config_layout.setSpacing(6)
+
+        self.lbl_cam_param = QLabel("Webcam Index:")
+        self.lbl_cam_param.setStyleSheet("color: #aaaaaa; font-size: 11px; font-weight: bold;")
+        cam_config_layout.addWidget(self.lbl_cam_param)
 
         self.ip_input = QLineEdit()
-        self.ip_input.setPlaceholderText("IP Camera URL (e.g. http://192.168.1.50:8080/video, rtsp://...) or Webcam index (0, 1)")
+        self.ip_input.setText("0")
+        self.ip_input.setPlaceholderText("Enter webcam index (0, 1, 2) or IP Camera URL (rtsp://..., http://...)")
         self.ip_input.setStyleSheet("""
             QLineEdit {
                 background-color: #121212;
@@ -240,18 +205,47 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
                 font-size: 11px;
             }
             QLineEdit:focus {
-                border: 1px solid #ff9800;
+                border: 1px solid #00e676;
             }
         """)
-        self.ip_input.returnPressed.connect(self._on_select_ip_cam)
-        cam_input_row.addWidget(self.ip_input, stretch=3)
+        self.ip_input.returnPressed.connect(self._on_apply_camera_input)
+        cam_config_layout.addWidget(self.ip_input, stretch=3)
+
+        self.btn_apply_cam = QPushButton("Connect")
+        self.btn_apply_cam.setStyleSheet("""
+            QPushButton {
+                background-color: #1a1a1a;
+                color: #ffffff;
+                border: 1px solid #333333;
+                font-weight: bold;
+                padding: 5px 12px;
+                border-radius: 4px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #2a2a2a;
+                border: 1px solid #00e676;
+            }
+        """)
+        self.btn_apply_cam.clicked.connect(self._on_apply_camera_input)
+        cam_config_layout.addWidget(self.btn_apply_cam)
 
         self.ip_status_lbl = QLabel("Active: Web Camera (Index 0)")
         self.ip_status_lbl.setStyleSheet("color: #00e676; font-size: 11px; font-weight: bold;")
-        cam_input_row.addWidget(self.ip_status_lbl)
+        cam_config_layout.addWidget(self.ip_status_lbl)
 
-        cam_source_layout.addLayout(cam_input_row)
+        cam_source_layout.addWidget(self.cam_config_widget)
         left_layout.addWidget(cam_source_box)
+
+        # Determine initial camera mode from video_capture
+        initial_mode = "webcam"
+        if self.cap and hasattr(self.cap, "cam_cfg"):
+            c_type = str(self.cap.cam_cfg.get("type", "usb")).lower()
+            if c_type == "ip":
+                initial_mode = "ipcam"
+            elif c_type in ("browser", "chrome", "phone", "web"):
+                initial_mode = "bridge"
+        self._update_camera_buttons_style(initial_mode)
 
         # Stream Controls Row (Flip Camera, Rotate, Advance Button, Recite Steps, Protocol Info)
         controls_layout = QHBoxLayout()
@@ -425,12 +419,143 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
         self.timer.timeout.connect(self._update_loop)
         self.timer.start(30)  # ~30 FPS on main GUI thread
 
+    def _update_camera_buttons_style(self, active_mode: str):
+        """Update button styling and input field labels based on active camera mode."""
+        self.active_camera_mode = active_mode
+
+        style_webcam_active = """
+            QPushButton {
+                background-color: #00e676;
+                color: #000000;
+                border: 2px solid #00ff88;
+                font-weight: bold;
+                padding: 7px 16px;
+                border-radius: 5px;
+                font-size: 11px;
+            }
+        """
+        style_webcam_inactive = """
+            QPushButton {
+                background-color: #112217;
+                color: #7dbe9b;
+                border: 1px solid #1e3a29;
+                font-weight: 500;
+                padding: 7px 16px;
+                border-radius: 5px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #1e3a29;
+                color: #00e676;
+                border: 1px solid #00e676;
+            }
+        """
+        style_ipcam_active = """
+            QPushButton {
+                background-color: #ff9800;
+                color: #000000;
+                border: 2px solid #ffb74d;
+                font-weight: bold;
+                padding: 7px 16px;
+                border-radius: 5px;
+                font-size: 11px;
+            }
+        """
+        style_ipcam_inactive = """
+            QPushButton {
+                background-color: #241a0d;
+                color: #d4a76a;
+                border: 1px solid #3d2c16;
+                font-weight: 500;
+                padding: 7px 16px;
+                border-radius: 5px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #3d2c16;
+                color: #ff9800;
+                border: 1px solid #ff9800;
+            }
+        """
+        style_bridge_active = """
+            QPushButton {
+                background-color: #58a6ff;
+                color: #000000;
+                border: 2px solid #79c0ff;
+                font-weight: bold;
+                padding: 7px 16px;
+                border-radius: 5px;
+                font-size: 11px;
+            }
+        """
+        style_bridge_inactive = """
+            QPushButton {
+                background-color: #131d2b;
+                color: #8da2bd;
+                border: 1px solid #1f2f45;
+                font-weight: 500;
+                padding: 7px 16px;
+                border-radius: 5px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #1f2f45;
+                color: #58a6ff;
+                border: 1px solid #58a6ff;
+            }
+        """
+
+        if active_mode == "webcam":
+            self.btn_webcam.setStyleSheet(style_webcam_active)
+            self.btn_ipcam.setStyleSheet(style_ipcam_inactive)
+            self.btn_bridge.setStyleSheet(style_bridge_inactive)
+            if hasattr(self, "lbl_cam_param"):
+                self.lbl_cam_param.setText("Webcam Index:")
+            if hasattr(self, "ip_input"):
+                self.ip_input.setPlaceholderText("Webcam Device Index (e.g. 0, 1, 2)")
+                # If current text is a URL, reset to 0
+                if any(self.ip_input.text().strip().startswith(p) for p in ["http", "rtsp"]):
+                    self.ip_input.setText("0")
+        elif active_mode == "ipcam":
+            self.btn_webcam.setStyleSheet(style_webcam_inactive)
+            self.btn_ipcam.setStyleSheet(style_ipcam_active)
+            self.btn_bridge.setStyleSheet(style_bridge_inactive)
+            if hasattr(self, "lbl_cam_param"):
+                self.lbl_cam_param.setText("IP Stream URL:")
+            if hasattr(self, "ip_input"):
+                self.ip_input.setPlaceholderText("IP Camera URL (e.g. http://192.168.1.50:8080/video, rtsp://...)")
+                # If current text is just a single digit, suggest default IP camera URL
+                if self.ip_input.text().strip().isdigit() or not self.ip_input.text().strip():
+                    self.ip_input.setText("http://192.168.1.50:8080/video")
+        else:  # bridge
+            self.btn_webcam.setStyleSheet(style_webcam_inactive)
+            self.btn_ipcam.setStyleSheet(style_ipcam_inactive)
+            self.btn_bridge.setStyleSheet(style_bridge_active)
+            if hasattr(self, "lbl_cam_param"):
+                self.lbl_cam_param.setText("Phone Uplink:")
+            if hasattr(self, "ip_input"):
+                self.ip_input.setPlaceholderText("Port (default: 8000)")
+                self.ip_input.setText("8000")
+
+    def _on_apply_camera_input(self):
+        """Dispatches connection request based on current active camera mode."""
+        if getattr(self, "active_camera_mode", "webcam") == "ipcam":
+            self._on_select_ip_cam()
+        elif getattr(self, "active_camera_mode", "webcam") == "bridge":
+            self._on_select_mobile_bridge()
+        else:
+            self._on_select_webcam()
+
     def _on_select_webcam(self):
         """Switch directly to local USB / DirectShow Web Camera (index 0 or entered integer)."""
+        self._update_camera_buttons_style("webcam")
+
         input_text = self.ip_input.text().strip()
         cam_index = 0
         if input_text.isdigit():
             cam_index = int(input_text)
+        else:
+            self.ip_input.setText("0")
 
         self.ip_status_lbl.setText(f"Connecting to Webcam {cam_index}...")
         self.ip_status_lbl.setStyleSheet("color: #ff9800; font-size: 11px;")
@@ -447,15 +572,14 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
 
     def _on_select_ip_cam(self):
         """Switch to Network IP Camera (RTSP / HTTP / MJPEG stream)."""
+        self._update_camera_buttons_style("ipcam")
+
         url_text = self.ip_input.text().strip()
-        if not url_text:
+        if not url_text or url_text.isdigit():
             url_text = "http://192.168.1.50:8080/video"
             self.ip_input.setText(url_text)
 
-        if url_text.isdigit():
-            source = int(url_text)
-        else:
-            source = url_text
+        source = url_text
 
         self.ip_status_lbl.setText("Connecting to IP Stream...")
         self.ip_status_lbl.setStyleSheet("color: #ff9800; font-size: 11px;")
@@ -475,6 +599,8 @@ class PrahariMainWindow(QMainWindow if HAS_PYQT else object):
 
     def _on_select_mobile_bridge(self):
         """Switch to Zero-Install Mobile Browser Bridge."""
+        self._update_camera_buttons_style("bridge")
+
         self.ip_status_lbl.setText("Activating Mobile Bridge...")
         self.ip_status_lbl.setStyleSheet("color: #ff9800; font-size: 11px;")
         QApplication.processEvents()

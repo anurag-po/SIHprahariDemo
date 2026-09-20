@@ -6,23 +6,60 @@ PRAHARI is an offline, edge-running computer vision desktop application designed
 
 ---
 
-## 🚀 Quick Setup & Installation (End-User)
+## ⚡ How to Run the Project Using Git Clone (Quickstart)
 
-### Option A: One-Click Windows Installer (Recommended)
-1. Download **`PRAHARI-Setup-v1.0.0.exe`** from the `release/` folder or [Releases](https://github.com/anurag-po/SIHprahariDemo/releases).
-2. Double-click **`PRAHARI-Setup-v1.0.0.exe`**.
-3. Choose your desired install location (default: `%LOCALAPPDATA%\Programs\PRAHARI`).
-4. Click **Install PRAHARI**. The installer will automatically:
-   - Extract the complete standalone package.
-   - Register Desktop & Start Menu shortcuts.
-   - Verify package integrity (SHA-256).
-5. Check **Launch PRAHARI after installation** and click **Finish**.
-> **Note:** The installed application runs 100% standalone on any clean 64-bit Windows machine without requiring Python, pip, or Visual Studio.
+Follow these simple steps to clone, set up, and run PRAHARI directly from source:
 
-### Option B: Portable Standalone ZIP (Zero-Install)
-1. Download **`PRAHARI-v1.0.0-Windows-x64.zip`** from the `release/` folder.
-2. Extract the ZIP archive anywhere on your system.
-3. Double-click **`PRAHARI.exe`** to launch directly.
+### Step 1: Clone the Repository
+```bash
+git clone https://github.com/anurag-po/SIHprahariDemo.git
+cd SIHprahariDemo
+```
+
+### Step 2: Set Up Python Environment & Install Dependencies
+*(Python 3.10+ recommended)*
+```bash
+# Optional: create & activate a virtual environment
+python -m venv venv
+
+# Activate on Windows:
+venv\Scripts\activate
+# Or on Linux / macOS:
+source venv/bin/activate
+
+# Upgrade pip and install required dependencies
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### Step 3: Run the Application
+
+You can launch PRAHARI using any of the following convenient options:
+
+#### Option A: 1-Click Automated Setup (Windows)
+Double-click **`setup.bat`** or execute:
+```powershell
+.\setup.bat
+```
+*(This verifies dependencies, model weights, and launches PRAHARI automatically).*
+
+#### Option B: 1-Click Batch Launcher (Windows)
+Double-click **`run_prahari.bat`** or execute:
+```powershell
+.\run_prahari.bat
+```
+
+#### Option C: Direct Python Command
+```bash
+# Launch PRAHARI Desktop GUI (Everyday Desk Objects Protocol)
+python src/main.py --config config/desk_objects_experiment.json
+
+# Launch with an IP Camera stream
+python src/main.py --camera-type ip --ip-url http://192.168.1.50:8080/video
+
+# Launch in Headless Console Mode (No GUI)
+python src/main.py --headless --no-voice
+```
 
 ---
 
@@ -46,27 +83,14 @@ PRAHARI features a dedicated **Camera Source Selection Panel** right in the desk
 
 ## 🛠 Developer & Source Workflow
 
-### 1. Requirements & Installation
-```powershell
-pip install -r requirements.txt
-```
-
-### 2. Run Automated Tests
+### 1. Run Automated Tests
 ```powershell
 python tests/test_capture_ip.py
 python tests/test_prahari_upgrade.py
+python tests/test_packaging.py
 ```
 
-### 3. Launch from Source
-```powershell
-# Launch PRAHARI (Everyday Desk Objects Protocol)
-python src/main.py --config config/desk_objects_experiment.json
-
-# Headless mode (no GUI)
-python src/main.py --headless --no-voice
-```
-
-### 4. Build Standalone Distribution & Packages
+### 2. Build Standalone Distribution & Packages
 ```powershell
 # Build PyInstaller onedir distribution (dist/PRAHARI/PRAHARI.exe)
 .\packaging\build_windows.bat
@@ -85,10 +109,13 @@ python src/main.py --headless --no-voice
 ```text
 SIHprahariDemo/
 ├── config/
-│   └── desk_objects_experiment.json       # Mission protocol sequence & ROIs
+│   ├── desk_objects_experiment.json       # Mission protocol sequence & ROIs
+│   └── led_circuit_continuity_test.json   # Electronics continuity protocol
 ├── models/
-│   └── yolov8n.pt                         # Bundled YOLOv8 object detector weights
+│   ├── yolov8n.pt                         # Bundled YOLOv8 object detector weights
+│   └── hand_landmarker.task               # Bundled MediaPipe hand landmarker model
 ├── src/
+│   ├── version.py                         # Single source of truth versioning
 │   ├── capture.py                         # USB, RTSP IP, & Mobile Browser Bridge capture engine
 │   ├── download_models.py                 # Automatic model weight resolver
 │   ├── gui.py                             # PyQt6 dark-theme desktop interface & camera selectors
@@ -112,14 +139,13 @@ SIHprahariDemo/
 │       └── PRAHARI_Setup.cs               # Native WinForms installer source
 ├── tests/
 │   ├── test_capture_ip.py                 # Camera engine test suite
-│   └── test_prahari_upgrade.py            # Sequence, risk engine & verification test suite
+│   ├── test_prahari_upgrade.py            # Sequence, risk engine & verification test suite
+│   └── test_packaging.py                  # Path, packaging & SHA-256 integrity test suite
 ├── tools/
 │   └── failure_injector.py                # Digital Twin failure injection harness
-├── release/                               # Distributable installer and ZIP releases
-│   ├── PRAHARI-Setup-v1.0.0.exe           # Native Windows Installer
-│   ├── PRAHARI-v1.0.0-Windows-x64.zip     # Portable Standalone Archive
-│   └── SHA256SUMS.txt                     # Cryptographic checksums
-├── requirements.txt
+├── run_prahari.bat                        # 1-Click launcher script
+├── setup.bat                              # Automated setup and launch script
+├── requirements.txt                       # Project Python dependencies
 └── README.md
 ```
 
@@ -127,7 +153,7 @@ SIHprahariDemo/
 
 ## 🔒 Security & Data Paths
 
-When running the packaged application:
-- **Application Binaries & Assets**: Contained in the install directory (`%LOCALAPPDATA%\Programs\PRAHARI`).
+When running the application:
+- **Application Binaries & Assets**: Loaded from installation/project root (`models/`, `config/`).
 - **Audit Logs**: Stored under `%LOCALAPPDATA%\PRAHARI\logs\`.
 - **Session MP4 Recordings**: Stored under `%LOCALAPPDATA%\PRAHARI\recordings\`.

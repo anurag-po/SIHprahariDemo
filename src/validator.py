@@ -45,15 +45,17 @@ class ExperimentValidator:
         self.violation_cooldown: float = 10.0
         self.step_start_time: float = time.time()
 
-        # Initial prompt announcement
-        self._announce_initial()
-
-    def _announce_initial(self):
+    def announce_initial_step(self):
+        """Announce the first step prompt after GUI is fully initialized and visible."""
         self.step_start_time = time.time()
         first_steps = self.get_expected_next_steps()
         if first_steps and self.voice:
             first_step = self.steps_by_id[first_steps[0]]
             self.voice.say_guidance(first_step.get("voice_prompt", f"Begin with {first_step['name']}."))
+
+    def _announce_initial(self):
+        # Backwards compatibility alias
+        self.announce_initial_step()
 
     def recite_protocol(self):
         """Recite the current active step once aloud."""

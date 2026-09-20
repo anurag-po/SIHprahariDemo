@@ -28,8 +28,8 @@ models/*.pt
 models/*.task
 *.pt
 
-# Large release archives (Upload ZIP to GitHub Releases page, not git commit)
-release/*.zip
+# Release output directory
+release/
 *.zip
 
 # Logs & Recordings

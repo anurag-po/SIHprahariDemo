@@ -33,10 +33,11 @@ xcopy /e /i /y "models" "dist\PRAHARI\models\" >nul 2>&1
 if not exist "dist\PRAHARI\_internal\models" mkdir "dist\PRAHARI\_internal\models"
 xcopy /e /i /y "models" "dist\PRAHARI\_internal\models\" >nul 2>&1
 
-if not exist "dist\PRAHARI\_internal\config" if not exist "dist\PRAHARI\config" (
-    echo [*] Copying config folder into dist\PRAHARI\config...
-    xcopy /e /i /y "config" "dist\PRAHARI\config\" >nul 2>&1
-)
+echo [*] Syncing config folder into dist\PRAHARI\config...
+if not exist "dist\PRAHARI\config" mkdir "dist\PRAHARI\config"
+xcopy /e /i /y "config" "dist\PRAHARI\config\" >nul 2>&1
+if not exist "dist\PRAHARI\_internal\config" mkdir "dist\PRAHARI\_internal\config"
+xcopy /e /i /y "config" "dist\PRAHARI\_internal\config\" >nul 2>&1
 
 echo ==============================================================================
 echo   [SUCCESS] Standalone Build Complete: dist\PRAHARI\PRAHARI.exe

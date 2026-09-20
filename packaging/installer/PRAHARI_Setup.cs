@@ -316,20 +316,38 @@ namespace PrahariInstaller
                 Directory.CreateDirectory(tempDir);
                 string zipPath = Path.Combine(tempDir, RELEASE_ZIP_NAME);
 
+                // Step 0: Check for running PRAHARI process
+                Process[] running = Process.GetProcessesByName("PRAHARI");
+                if (running != null && running.Length > 0)
+                {
+                    throw new Exception("PRAHARI is currently running. Please close all running PRAHARI instances and click Install again.");
+                }
+
                 // Step 1: Check for local package first (offline installer support)
                 string localExeDir = AppDomain.CurrentDomain.BaseDirectory;
                 string localZip = Path.Combine(localExeDir, RELEASE_ZIP_NAME);
                 string siblingZip = Path.Combine(localExeDir, "..", "release", RELEASE_ZIP_NAME);
+                string localChecksum = Path.Combine(localExeDir, "SHA256SUMS.txt");
+                string siblingChecksum = Path.Combine(localExeDir, "..", "release", "SHA256SUMS.txt");
+                string checksumContent = "";
 
                 if (File.Exists(localZip))
                 {
                     SetStatus("Loading local package...", "Using " + localZip, 20);
                     File.Copy(localZip, zipPath, true);
+                    if (File.Exists(localChecksum))
+                    {
+                        try { checksumContent = File.ReadAllText(localChecksum); } catch { }
+                    }
                 }
                 else if (File.Exists(siblingZip))
                 {
                     SetStatus("Loading release package...", "Using " + siblingZip, 20);
                     File.Copy(siblingZip, zipPath, true);
+                    if (File.Exists(siblingChecksum))
+                    {
+                        try { checksumContent = File.ReadAllText(siblingChecksum); } catch { }
+                    }
                 }
                 else
                 {
@@ -356,14 +374,50 @@ namespace PrahariInstaller
                         {
                             throw new Exception("Unable to download release package over HTTPS. Please check your internet connection or place " + RELEASE_ZIP_NAME + " next to this installer.\nError: " + dlEx.Message);
                         }
+
+                        // Try to download SHA256SUMS.txt as well
+                        try
+                        {
+                            checksumContent = client.DownloadString(new Uri(CHECKSUM_URL));
+                        }
+                        catch { }
                     }
                 }
 
                 // Step 2: Verification
                 SetStatus("Verifying package integrity...", "Calculating SHA-256 checksum...", 55);
-                string calculatedHash = ComputeSha256(zipPath);
+                string calculatedHash = ComputeSha256(zipPath).ToLowerInvariant();
 
-                // Step 3: Extract & Install
+                // If checksum reference exists, enforce verification
+                if (!string.IsNullOrEmpty(checksumContent))
+                {
+                    string expectedHash = "";
+                    foreach (string line in checksumContent.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        string trimmed = line.Trim();
+                        if (trimmed.Contains(RELEASE_ZIP_NAME) || trimmed.Length >= 64)
+                        {
+                            string[] parts = trimmed.Split(new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (parts.Length > 0 && parts[0].Length == 64)
+                            {
+                                expectedHash = parts[0].ToLowerInvariant();
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(expectedHash))
+                    {
+                        if (calculatedHash != expectedHash)
+                        {
+                            try { File.Delete(zipPath); } catch { }
+                            throw new Exception("Installation aborted.\nThe downloaded package failed integrity verification.\nExpected SHA-256: " + expectedHash + "\nCalculated SHA-256: " + calculatedHash);
+                        }
+                        SetStatus("Package integrity verified.", "SHA-256: " + calculatedHash.Substring(0, 16) + "... [MATCH]", 65);
+                    }
+                }
+
+                // Step 3: Extract & Install with Zip Slip directory traversal validation
                 SetStatus("Installing PRAHARI...", "Extracting application files to " + finalInstallPath + "...", 70);
                 if (Directory.Exists(finalInstallPath))
                 {
@@ -382,7 +436,28 @@ namespace PrahariInstaller
                     Directory.CreateDirectory(finalInstallPath);
                 }
 
-                ZipFile.ExtractToDirectory(zipPath, finalInstallPath);
+                string fullDestDir = Path.GetFullPath(finalInstallPath);
+                using (ZipArchive archive = ZipFile.OpenRead(zipPath))
+                {
+                    foreach (ZipArchiveEntry entry in archive.Entries)
+                    {
+                        string destPath = Path.GetFullPath(Path.Combine(fullDestDir, entry.FullName));
+                        if (!destPath.StartsWith(fullDestDir, StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new System.Security.SecurityException("Archive contains illegal path traversal entry: " + entry.FullName);
+                        }
+
+                        if (string.IsNullOrEmpty(entry.Name))
+                        {
+                            Directory.CreateDirectory(destPath);
+                        }
+                        else
+                        {
+                            Directory.CreateDirectory(Path.GetDirectoryName(destPath));
+                            entry.ExtractToFile(destPath, true);
+                        }
+                    }
+                }
 
                 // Check for nested directory if zipped root folder
                 string nestedExe = Path.Combine(finalInstallPath, "PRAHARI", "PRAHARI.exe");
