@@ -24,10 +24,15 @@ if not exist "dist\PRAHARI\PRAHARI.exe" (
 
 echo [1/5] Syncing Standalone Build to %RELEASE_DIR%\PRAHARI ...
 robocopy "dist\PRAHARI" "%RELEASE_DIR%\PRAHARI" /E /NFL /NDL /NJH /NJS >nul 2>&1
+:: Exclude heavy model weights from release package so models are downloaded on first launch
+del /f /q "%RELEASE_DIR%\PRAHARI\models\*.pt" >nul 2>&1
+del /f /q "%RELEASE_DIR%\PRAHARI\models\*.task" >nul 2>&1
+del /f /q "%RELEASE_DIR%\PRAHARI\_internal\models\*.pt" >nul 2>&1
+del /f /q "%RELEASE_DIR%\PRAHARI\_internal\models\*.task" >nul 2>&1
 
-echo [2/5] Creating Portable Package Archive: %RELEASE_ZIP% ...
+echo [2/5] Creating Portable Package Archive (models excluded for first-launch acquisition): %RELEASE_ZIP% ...
 if exist "%RELEASE_ZIP%" del /f /q "%RELEASE_ZIP%"
-python -c "import zipfile, os; z = zipfile.ZipFile(r'%RELEASE_ZIP%', 'w', zipfile.ZIP_DEFLATED); [z.write(os.path.join(root, f), os.path.relpath(os.path.join(root, f), r'dist')) for root, _, files in os.walk(r'dist\PRAHARI') for f in files]; z.write(r'run_prahari.bat', 'run_prahari.bat') if os.path.exists(r'run_prahari.bat') else None; z.close()"
+python -c "import zipfile, os; z = zipfile.ZipFile(r'%RELEASE_ZIP%', 'w', zipfile.ZIP_DEFLATED); [z.write(os.path.join(root, f), os.path.relpath(os.path.join(root, f), r'dist')) for root, _, files in os.walk(r'dist\PRAHARI') for f in files if not f.endswith('.pt') and not f.endswith('.task')]; z.write(r'run_prahari.bat', 'run_prahari.bat') if os.path.exists(r'run_prahari.bat') else None; z.close()"
 if %errorlevel% neq 0 (
     echo [!] Error creating release ZIP archive!
     exit /b 1

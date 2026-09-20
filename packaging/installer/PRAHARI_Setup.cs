@@ -3,34 +3,442 @@ using System.IO;
 using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text;
 using System.Threading;
 using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace PrahariInstaller
 {
+    public static class Constants
+    {
+        public const string APP_NAME = "PRAHARI";
+        public const string APP_VERSION = "v1.0.0";
+        public const string RELEASE_ZIP_NAME = "PRAHARI-v1.0.0-Windows-x64.zip";
+        public const string RELEASE_URL = "https://github.com/anurag-po/SIHprahariDemo/releases/download/v1.0.0/PRAHARI-v1.0.0-Windows-x64.zip";
+        public const string CHECKSUM_URL = "https://github.com/anurag-po/SIHprahariDemo/releases/download/v1.0.0/SHA256SUMS.txt";
+    }
+
     static class Program
     {
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new InstallerForm());
+
+            string exeName = Path.GetFileName(Application.ExecutablePath).ToLowerInvariant();
+            bool isUninstall = exeName.Contains("uninstall");
+            bool isSilent = false;
+            string customTarget = null;
+
+            if (args != null && args.Length > 0)
+            {
+                foreach (string arg in args)
+                {
+                    if (arg.Equals("/uninstall", StringComparison.OrdinalIgnoreCase) ||
+                        arg.Equals("--uninstall", StringComparison.OrdinalIgnoreCase) ||
+                        arg.Equals("-u", StringComparison.OrdinalIgnoreCase))
+                    {
+                        isUninstall = true;
+                    }
+                    else if (arg.Equals("/silent", StringComparison.OrdinalIgnoreCase) ||
+                             arg.Equals("--silent", StringComparison.OrdinalIgnoreCase) ||
+                             arg.Equals("-s", StringComparison.OrdinalIgnoreCase) ||
+                             arg.Equals("/s", StringComparison.OrdinalIgnoreCase))
+                    {
+                        isSilent = true;
+                    }
+                    else if (!arg.StartsWith("/") && !arg.StartsWith("-"))
+                    {
+                        customTarget = arg.Trim('"');
+                    }
+                }
+            }
+
+            if (isSilent)
+            {
+                if (isUninstall)
+                {
+                    InstallerCore.ExecuteUninstall(AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\'));
+                }
+                else
+                {
+                    string target = customTarget;
+                    if (string.IsNullOrEmpty(target))
+                    {
+                        target = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Constants.APP_NAME);
+                    }
+                    InstallerCore.ExecuteInstall(target, true, true, (s, d, p) => Console.WriteLine("[Setup] " + s + " (" + p + "%)"));
+                }
+                return;
+            }
+
+            if (isUninstall)
+            {
+                Application.Run(new UninstallerForm());
+            }
+            else
+            {
+                Application.Run(new InstallerForm(customTarget));
+            }
+        }
+    }
+
+    public static class InstallerCore
+    {
+        public static bool IsAdministrator()
+        {
+            try
+            {
+                using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
+                {
+                    WindowsPrincipal principal = new WindowsPrincipal(identity);
+                    return principal.IsInRole(WindowsBuiltInRole.Administrator);
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public static string ComputeSha256(string filePath)
+        {
+            using (SHA256 sha = SHA256.Create())
+            {
+                using (FileStream fs = File.OpenRead(filePath))
+                {
+                    byte[] hash = sha.ComputeHash(fs);
+                    StringBuilder sb = new StringBuilder();
+                    foreach (byte b in hash)
+                    {
+                        sb.Append(b.ToString("x2"));
+                    }
+                    return sb.ToString();
+                }
+            }
+        }
+
+        public static void CreateShortcut(string shortcutPath, string targetPath, string workingDir, string description)
+        {
+            try
+            {
+                Type shellType = Type.GetTypeFromProgID("WScript.Shell");
+                dynamic shell = Activator.CreateInstance(shellType);
+                dynamic shortcut = shell.CreateShortcut(shortcutPath);
+                shortcut.TargetPath = targetPath;
+                shortcut.WorkingDirectory = workingDir;
+                shortcut.Description = description;
+                shortcut.Save();
+            }
+            catch (Exception)
+            {
+                try
+                {
+                    string psCommand = string.Format(
+                        "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('{0}'); $s.TargetPath = '{1}'; $s.WorkingDirectory = '{2}'; $s.Description = '{3}'; $s.Save()",
+                        shortcutPath.Replace("'", "''"),
+                        targetPath.Replace("'", "''"),
+                        workingDir.Replace("'", "''"),
+                        description.Replace("'", "''")
+                    );
+                    ProcessStartInfo psi = new ProcessStartInfo("powershell.exe", "-NoProfile -Command \"" + psCommand + "\"");
+                    psi.CreateNoWindow = true;
+                    psi.UseShellExecute = false;
+                    Process p = Process.Start(psi);
+                    if (p != null) p.WaitForExit();
+                }
+                catch { }
+            }
+        }
+
+        public static void RegisterUninstaller(string installPath, string uninstallerPath)
+        {
+            try
+            {
+                RegistryKey baseKey = IsAdministrator() ? Registry.LocalMachine : Registry.CurrentUser;
+                using (RegistryKey key = baseKey.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\PRAHARI"))
+                {
+                    if (key != null)
+                    {
+                        key.SetValue("DisplayName", "PRAHARI - Mission HAR Space Experiment Assistant");
+                        key.SetValue("DisplayVersion", Constants.APP_VERSION.TrimStart('v'));
+                        key.SetValue("Publisher", "PRAHARI Mission Team");
+                        key.SetValue("InstallLocation", installPath);
+                        key.SetValue("UninstallString", "\"" + uninstallerPath + "\"");
+                        key.SetValue("DisplayIcon", Path.Combine(installPath, "PRAHARI.exe") + ",0");
+                        key.SetValue("NoModify", 1, RegistryValueKind.DWord);
+                        key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
+                        key.SetValue("EstimatedSize", 180000, RegistryValueKind.DWord);
+                    }
+                }
+            }
+            catch { }
+        }
+
+        public static void ExecuteInstall(string finalInstallPath, bool createDesktop, bool createStartMenu, Action<string, string, int> reportProgress)
+        {
+            // Force TLS 1.2
+            ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768 | SecurityProtocolType.Tls;
+
+            string tempDir = Path.Combine(Path.GetTempPath(), "PrahariInstaller_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            string zipPath = Path.Combine(tempDir, Constants.RELEASE_ZIP_NAME);
+
+            // Step 0: Check for running PRAHARI process
+            Process[] running = Process.GetProcessesByName("PRAHARI");
+            if (running != null && running.Length > 0)
+            {
+                throw new Exception("PRAHARI is currently running. Please close running PRAHARI instances and try again.");
+            }
+
+            // Step 1: Pre-create writable user data directories (%LOCALAPPDATA%\PRAHARI\...)
+            if (reportProgress != null) reportProgress("Preparing user directories...", "%LOCALAPPDATA%\\PRAHARI", 10);
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string userDir = Path.Combine(localAppData, Constants.APP_NAME);
+            Directory.CreateDirectory(userDir);
+            Directory.CreateDirectory(Path.Combine(userDir, "models"));
+            Directory.CreateDirectory(Path.Combine(userDir, "logs"));
+            Directory.CreateDirectory(Path.Combine(userDir, "recordings"));
+
+            // Step 2: Locate or download package archive
+            string localExeDir = AppDomain.CurrentDomain.BaseDirectory;
+            string localZip = Path.Combine(localExeDir, Constants.RELEASE_ZIP_NAME);
+            string siblingZip = Path.Combine(localExeDir, "..", "release", Constants.RELEASE_ZIP_NAME);
+            string localChecksum = Path.Combine(localExeDir, "SHA256SUMS.txt");
+            string siblingChecksum = Path.Combine(localExeDir, "..", "release", "SHA256SUMS.txt");
+            string checksumContent = "";
+
+            if (File.Exists(localZip))
+            {
+                if (reportProgress != null) reportProgress("Loading local package...", "Using " + localZip, 25);
+                File.Copy(localZip, zipPath, true);
+                if (File.Exists(localChecksum))
+                {
+                    try { checksumContent = File.ReadAllText(localChecksum); } catch { }
+                }
+            }
+            else if (File.Exists(siblingZip))
+            {
+                if (reportProgress != null) reportProgress("Loading release package...", "Using " + siblingZip, 25);
+                File.Copy(siblingZip, zipPath, true);
+                if (File.Exists(siblingChecksum))
+                {
+                    try { checksumContent = File.ReadAllText(siblingChecksum); } catch { }
+                }
+            }
+            else
+            {
+                if (reportProgress != null) reportProgress("Downloading application package...", "Connecting to GitHub Releases...", 15);
+                using (WebClient client = new WebClient())
+                {
+                    client.Headers.Add("User-Agent", "PRAHARI-Bootstrapper-Installer");
+                    client.DownloadProgressChanged += (s, ev) =>
+                    {
+                        int pct = 15 + (int)(ev.ProgressPercentage * 0.4);
+                        if (reportProgress != null)
+                        {
+                            reportProgress(
+                                string.Format("Downloading PRAHARI ({0} MB / {1} MB)...", (ev.BytesReceived / 1048576.0).ToString("0.0"), (ev.TotalBytesToReceive / 1048576.0).ToString("0.0")),
+                                "HTTPS Download from GitHub Releases",
+                                pct
+                            );
+                        }
+                    };
+
+                    try
+                    {
+                        client.DownloadFile(new Uri(Constants.RELEASE_URL), zipPath);
+                    }
+                    catch (Exception dlEx)
+                    {
+                        throw new Exception("Unable to download release package over HTTPS. Please check your internet connection or place " + Constants.RELEASE_ZIP_NAME + " next to this installer.\nError: " + dlEx.Message);
+                    }
+
+                    try
+                    {
+                        checksumContent = client.DownloadString(new Uri(Constants.CHECKSUM_URL));
+                    }
+                    catch { }
+                }
+            }
+
+            // Step 3: Checksum integrity verification
+            if (reportProgress != null) reportProgress("Verifying package integrity...", "Calculating SHA-256 checksum...", 55);
+            string calculatedHash = ComputeSha256(zipPath).ToLowerInvariant();
+
+            if (!string.IsNullOrEmpty(checksumContent))
+            {
+                string expectedHash = "";
+                foreach (string line in checksumContent.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string trimmed = line.Trim();
+                    if (trimmed.Contains(Constants.RELEASE_ZIP_NAME) || trimmed.Length >= 64)
+                    {
+                        string[] parts = trimmed.Split(new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                        if (parts.Length > 0 && parts[0].Length == 64)
+                        {
+                            expectedHash = parts[0].ToLowerInvariant();
+                            break;
+                        }
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(expectedHash))
+                {
+                    if (calculatedHash != expectedHash)
+                    {
+                        try { File.Delete(zipPath); } catch { }
+                        throw new Exception("Installation aborted.\nThe downloaded package failed integrity verification.\nExpected: " + expectedHash + "\nActual: " + calculatedHash);
+                    }
+                    if (reportProgress != null) reportProgress("Package integrity verified.", "SHA-256: " + calculatedHash.Substring(0, 16) + "... [MATCH]", 65);
+                }
+            }
+
+            // Step 4: Extract application files with path traversal security
+            if (reportProgress != null) reportProgress("Installing application files...", "Extracting to " + finalInstallPath + "...", 70);
+            if (!Directory.Exists(finalInstallPath))
+            {
+                Directory.CreateDirectory(finalInstallPath);
+            }
+
+            string fullDestDir = Path.GetFullPath(finalInstallPath);
+            using (ZipArchive archive = ZipFile.OpenRead(zipPath))
+            {
+                foreach (ZipArchiveEntry entry in archive.Entries)
+                {
+                    string destPath = Path.GetFullPath(Path.Combine(fullDestDir, entry.FullName));
+                    if (!destPath.StartsWith(fullDestDir, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new System.Security.SecurityException("Archive contains illegal path traversal entry: " + entry.FullName);
+                    }
+
+                    if (string.IsNullOrEmpty(entry.Name))
+                    {
+                        Directory.CreateDirectory(destPath);
+                    }
+                    else
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(destPath));
+                        entry.ExtractToFile(destPath, true);
+                    }
+                }
+            }
+
+            // Flatten nested single folder if zipped root
+            string nestedExe = Path.Combine(finalInstallPath, Constants.APP_NAME, "PRAHARI.exe");
+            if (File.Exists(nestedExe))
+            {
+                string nestedDir = Path.Combine(finalInstallPath, Constants.APP_NAME);
+                foreach (string item in Directory.GetFileSystemEntries(nestedDir))
+                {
+                    string dest = Path.Combine(finalInstallPath, Path.GetFileName(item));
+                    if (Directory.Exists(item))
+                    {
+                        if (Directory.Exists(dest)) Directory.Delete(dest, true);
+                        Directory.Move(item, dest);
+                    }
+                    else
+                    {
+                        if (File.Exists(dest)) File.Delete(dest);
+                        File.Move(item, dest);
+                    }
+                }
+                Directory.Delete(nestedDir, true);
+            }
+
+            // Step 5: Install Uninstaller executable & register with Windows
+            if (reportProgress != null) reportProgress("Registering uninstaller...", "Configuring Windows Apps/Programs...", 85);
+            string uninstallerPath = Path.Combine(finalInstallPath, "uninstall.exe");
+            try
+            {
+                File.Copy(Application.ExecutablePath, uninstallerPath, true);
+            }
+            catch { }
+
+            RegisterUninstaller(finalInstallPath, uninstallerPath);
+
+            // Step 6: Create Desktop & Start Menu Shortcuts
+            if (reportProgress != null) reportProgress("Creating shortcuts...", "Registering Desktop and Start Menu entries...", 92);
+            string mainExe = Path.Combine(finalInstallPath, "PRAHARI.exe");
+
+            if (createDesktop)
+            {
+                string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+                string shortcutPath = Path.Combine(desktopPath, "PRAHARI.lnk");
+                CreateShortcut(shortcutPath, mainExe, finalInstallPath, "PRAHARI - Mission HAR Space Experiment Assistant");
+            }
+
+            if (createStartMenu)
+            {
+                string startMenu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs", Constants.APP_NAME);
+                Directory.CreateDirectory(startMenu);
+                string shortcutPath = Path.Combine(startMenu, "PRAHARI.lnk");
+                CreateShortcut(shortcutPath, mainExe, finalInstallPath, "PRAHARI - Mission HAR Space Experiment Assistant");
+
+                string uninstallShortcut = Path.Combine(startMenu, "Uninstall PRAHARI.lnk");
+                CreateShortcut(uninstallShortcut, uninstallerPath, finalInstallPath, "Uninstall PRAHARI");
+            }
+
+            // Cleanup temp
+            try { Directory.Delete(tempDir, true); } catch { }
+
+            if (reportProgress != null) reportProgress("Installation Completed Successfully!", "Ready at: " + finalInstallPath, 100);
+        }
+
+        public static void ExecuteUninstall(string installDir)
+        {
+            // 1. Terminate running PRAHARI processes
+            try
+            {
+                foreach (Process p in Process.GetProcessesByName("PRAHARI"))
+                {
+                    try { p.Kill(); } catch { }
+                }
+            }
+            catch { }
+
+            // 2. Remove Shortcuts
+            try
+            {
+                string desktopLnk = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "PRAHARI.lnk");
+                if (File.Exists(desktopLnk)) File.Delete(desktopLnk);
+
+                string startMenu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs", Constants.APP_NAME);
+                if (Directory.Exists(startMenu)) Directory.Delete(startMenu, true);
+            }
+            catch { }
+
+            // 3. Remove Windows Registry Uninstall entries
+            try
+            {
+                Registry.LocalMachine.DeleteSubKeyTree(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\PRAHARI", false);
+                Registry.CurrentUser.DeleteSubKeyTree(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\PRAHARI", false);
+            }
+            catch { }
+
+            // 4. Schedule deletion of installed application files after uninstaller exits
+            // Do NOT delete %LOCALAPPDATA%\PRAHARI (preserve user logs, recordings, models)
+            string scriptCmd = string.Format(
+                "/c ping 127.0.0.1 -n 2 > nul & rmdir /s /q \"{0}\"",
+                installDir
+            );
+
+            ProcessStartInfo psi = new ProcessStartInfo("cmd.exe", scriptCmd)
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false
+            };
+            Process.Start(psi);
         }
     }
 
     public class InstallerForm : Form
     {
-        private const string APP_NAME = "PRAHARI";
-        private const string APP_VERSION = "v1.0.0";
-        private const string GITHUB_REPO = "anurag-po/SIHprahariDemo";
-        private const string RELEASE_ZIP_NAME = "PRAHARI-v1.0.0-Windows-x64.zip";
-        private const string RELEASE_URL = "https://github.com/anurag-po/SIHprahariDemo/releases/download/v1.0.0/PRAHARI-v1.0.0-Windows-x64.zip";
-        private const string CHECKSUM_URL = "https://github.com/anurag-po/SIHprahariDemo/releases/download/v1.0.0/SHA256SUMS.txt";
-
         private Label lblTitle;
         private Label lblSubtitle;
         private Label lblInstallDir;
@@ -50,14 +458,18 @@ namespace PrahariInstaller
         private bool isInstalling = false;
         private string finalInstallPath = "";
 
-        public InstallerForm()
+        public InstallerForm(string customPath)
         {
             InitializeComponent();
+            if (!string.IsNullOrEmpty(customPath))
+            {
+                txtInstallDir.Text = customPath;
+            }
         }
 
         private void InitializeComponent()
         {
-            this.Text = "PRAHARI Setup — Mission HAR Assistant " + APP_VERSION;
+            this.Text = "PRAHARI Setup — Mission HAR Assistant " + Constants.APP_VERSION;
             this.Size = new Size(580, 440);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -86,7 +498,7 @@ namespace PrahariInstaller
 
             lblSubtitle = new Label
             {
-                Text = "Self-Contained Windows Desktop Application Installer " + APP_VERSION,
+                Text = "Self-Contained Windows Desktop Application Installer " + Constants.APP_VERSION,
                 Font = new Font("Segoe UI", 8.5F),
                 ForeColor = Color.FromArgb(139, 148, 158),
                 Location = new Point(18, 38),
@@ -112,10 +524,10 @@ namespace PrahariInstaller
             };
             pnlContent.Controls.Add(lblInstallDir);
 
+            // Canonical install location: C:\Program Files\PRAHARI
             string defaultPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Programs",
-                APP_NAME
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                Constants.APP_NAME
             );
 
             txtInstallDir = new TextBox
@@ -197,7 +609,7 @@ namespace PrahariInstaller
 
             lblDetails = new Label
             {
-                Text = "Package includes YOLOv8 detector, MediaPipe tracking, and PyQt6 GUI.",
+                Text = "Self-contained build with Python runtime, YOLO detector, and MediaPipe tracking.",
                 Location = new Point(0, 190),
                 Width = 525,
                 Height = 40,
@@ -276,6 +688,46 @@ namespace PrahariInstaller
                 return;
             }
 
+            // Check if installing to Program Files without admin rights
+            string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            if (finalInstallPath.StartsWith(programFiles, StringComparison.OrdinalIgnoreCase) && !InstallerCore.IsAdministrator())
+            {
+                DialogResult elevateChoice = MessageBox.Show(
+                    "Installing to 'C:\\Program Files\\PRAHARI' requires administrator privileges.\n\n" +
+                    "Click OK to restart the installer with administrator permissions via UAC,\n" +
+                    "or click Cancel to choose a writable user directory.",
+                    "Administrator Privileges Required",
+                    MessageBoxButtons.OKCancel,
+                    MessageBoxIcon.Information
+                );
+
+                if (elevateChoice == DialogResult.OK)
+                {
+                    try
+                    {
+                        ProcessStartInfo psi = new ProcessStartInfo
+                        {
+                            FileName = Application.ExecutablePath,
+                            Arguments = "\"" + finalInstallPath + "\"",
+                            UseShellExecute = true,
+                            Verb = "runas"
+                        };
+                        Process.Start(psi);
+                        Application.Exit();
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Could not elevate installer: " + ex.Message, "Elevation Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
+                }
+                else
+                {
+                    return;
+                }
+            }
+
             isInstalling = true;
             btnInstall.Enabled = false;
             btnBrowse.Enabled = false;
@@ -284,7 +736,42 @@ namespace PrahariInstaller
             chkStartMenuShortcut.Enabled = false;
             progressBar.Visible = true;
 
-            Thread worker = new Thread(InstallProcess);
+            Thread worker = new Thread(() =>
+            {
+                try
+                {
+                    InstallerCore.ExecuteInstall(
+                        finalInstallPath,
+                        chkDesktopShortcut.Checked,
+                        chkStartMenuShortcut.Checked,
+                        (status, details, progress) => SetStatus(status, details, progress)
+                    );
+
+                    this.BeginInvoke(new Action(() =>
+                    {
+                        progressBar.Value = 100;
+                        lblStatus.Text = "Installation Completed Successfully!";
+                        lblStatus.ForeColor = Color.FromArgb(0, 230, 118);
+                        lblDetails.Text = "Installed to: " + finalInstallPath + "\nRequired AI models will be acquired automatically on first launch.";
+                        chkLaunch.Visible = true;
+                        btnInstall.Text = "Finish";
+                        btnInstall.Enabled = true;
+                        btnInstall.BackColor = Color.FromArgb(35, 134, 54);
+                    }));
+                }
+                catch (Exception ex)
+                {
+                    this.BeginInvoke(new Action(() =>
+                    {
+                        lblStatus.Text = "Installation Encountered an Error";
+                        lblStatus.ForeColor = Color.FromArgb(248, 81, 73);
+                        lblDetails.Text = ex.Message;
+                        btnInstall.Text = "Close";
+                        btnInstall.Enabled = true;
+                        btnInstall.BackColor = Color.FromArgb(182, 35, 36);
+                    }));
+                }
+            });
             worker.IsBackground = true;
             worker.Start();
         }
@@ -304,281 +791,144 @@ namespace PrahariInstaller
                 progressBar.Value = progress;
             }
         }
+    }
 
-        private void InstallProcess()
+    public class UninstallerForm : Form
+    {
+        private Label lblTitle;
+        private Label lblMessage;
+        private Button btnUninstall;
+        private Button btnCancel;
+        private ProgressBar progressBar;
+        private Label lblStatus;
+
+        public UninstallerForm()
         {
-            try
-            {
-                // Force TLS 1.2 and 1.3
-                ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768 | SecurityProtocolType.Tls;
-
-                string tempDir = Path.Combine(Path.GetTempPath(), "PrahariInstaller_" + Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(tempDir);
-                string zipPath = Path.Combine(tempDir, RELEASE_ZIP_NAME);
-
-                // Step 0: Check for running PRAHARI process
-                Process[] running = Process.GetProcessesByName("PRAHARI");
-                if (running != null && running.Length > 0)
-                {
-                    throw new Exception("PRAHARI is currently running. Please close all running PRAHARI instances and click Install again.");
-                }
-
-                // Step 1: Check for local package first (offline installer support)
-                string localExeDir = AppDomain.CurrentDomain.BaseDirectory;
-                string localZip = Path.Combine(localExeDir, RELEASE_ZIP_NAME);
-                string siblingZip = Path.Combine(localExeDir, "..", "release", RELEASE_ZIP_NAME);
-                string localChecksum = Path.Combine(localExeDir, "SHA256SUMS.txt");
-                string siblingChecksum = Path.Combine(localExeDir, "..", "release", "SHA256SUMS.txt");
-                string checksumContent = "";
-
-                if (File.Exists(localZip))
-                {
-                    SetStatus("Loading local package...", "Using " + localZip, 20);
-                    File.Copy(localZip, zipPath, true);
-                    if (File.Exists(localChecksum))
-                    {
-                        try { checksumContent = File.ReadAllText(localChecksum); } catch { }
-                    }
-                }
-                else if (File.Exists(siblingZip))
-                {
-                    SetStatus("Loading release package...", "Using " + siblingZip, 20);
-                    File.Copy(siblingZip, zipPath, true);
-                    if (File.Exists(siblingChecksum))
-                    {
-                        try { checksumContent = File.ReadAllText(siblingChecksum); } catch { }
-                    }
-                }
-                else
-                {
-                    // Download from GitHub Release
-                    SetStatus("Downloading PRAHARI package...", "Connecting to GitHub Releases...", 10);
-                    using (WebClient client = new WebClient())
-                    {
-                        client.Headers.Add("User-Agent", "PRAHARI-Bootstrapper-Installer");
-                        client.DownloadProgressChanged += (s, ev) =>
-                        {
-                            int pct = 10 + (int)(ev.ProgressPercentage * 0.4);
-                            SetStatus(
-                                string.Format("Downloading PRAHARI ({0} MB / {1} MB)...", (ev.BytesReceived / 1048576.0).ToString("0.0"), (ev.TotalBytesToReceive / 1048576.0).ToString("0.0")),
-                                "HTTPS Download from GitHub Releases",
-                                pct
-                            );
-                        };
-
-                        try
-                        {
-                            client.DownloadFile(new Uri(RELEASE_URL), zipPath);
-                        }
-                        catch (Exception dlEx)
-                        {
-                            throw new Exception("Unable to download release package over HTTPS. Please check your internet connection or place " + RELEASE_ZIP_NAME + " next to this installer.\nError: " + dlEx.Message);
-                        }
-
-                        // Try to download SHA256SUMS.txt as well
-                        try
-                        {
-                            checksumContent = client.DownloadString(new Uri(CHECKSUM_URL));
-                        }
-                        catch { }
-                    }
-                }
-
-                // Step 2: Verification
-                SetStatus("Verifying package integrity...", "Calculating SHA-256 checksum...", 55);
-                string calculatedHash = ComputeSha256(zipPath).ToLowerInvariant();
-
-                // If checksum reference exists, enforce verification
-                if (!string.IsNullOrEmpty(checksumContent))
-                {
-                    string expectedHash = "";
-                    foreach (string line in checksumContent.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
-                    {
-                        string trimmed = line.Trim();
-                        if (trimmed.Contains(RELEASE_ZIP_NAME) || trimmed.Length >= 64)
-                        {
-                            string[] parts = trimmed.Split(new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-                            if (parts.Length > 0 && parts[0].Length == 64)
-                            {
-                                expectedHash = parts[0].ToLowerInvariant();
-                                break;
-                            }
-                        }
-                    }
-
-                    if (!string.IsNullOrEmpty(expectedHash))
-                    {
-                        if (calculatedHash != expectedHash)
-                        {
-                            try { File.Delete(zipPath); } catch { }
-                            throw new Exception("Installation aborted.\nThe downloaded package failed integrity verification.\nExpected SHA-256: " + expectedHash + "\nCalculated SHA-256: " + calculatedHash);
-                        }
-                        SetStatus("Package integrity verified.", "SHA-256: " + calculatedHash.Substring(0, 16) + "... [MATCH]", 65);
-                    }
-                }
-
-                // Step 3: Extract & Install with Zip Slip directory traversal validation
-                SetStatus("Installing PRAHARI...", "Extracting application files to " + finalInstallPath + "...", 70);
-                if (Directory.Exists(finalInstallPath))
-                {
-                    // Clean previous install safely
-                    try
-                    {
-                        foreach (string file in Directory.GetFiles(finalInstallPath))
-                        {
-                            try { File.Delete(file); } catch { }
-                        }
-                    }
-                    catch { }
-                }
-                else
-                {
-                    Directory.CreateDirectory(finalInstallPath);
-                }
-
-                string fullDestDir = Path.GetFullPath(finalInstallPath);
-                using (ZipArchive archive = ZipFile.OpenRead(zipPath))
-                {
-                    foreach (ZipArchiveEntry entry in archive.Entries)
-                    {
-                        string destPath = Path.GetFullPath(Path.Combine(fullDestDir, entry.FullName));
-                        if (!destPath.StartsWith(fullDestDir, StringComparison.OrdinalIgnoreCase))
-                        {
-                            throw new System.Security.SecurityException("Archive contains illegal path traversal entry: " + entry.FullName);
-                        }
-
-                        if (string.IsNullOrEmpty(entry.Name))
-                        {
-                            Directory.CreateDirectory(destPath);
-                        }
-                        else
-                        {
-                            Directory.CreateDirectory(Path.GetDirectoryName(destPath));
-                            entry.ExtractToFile(destPath, true);
-                        }
-                    }
-                }
-
-                // Check for nested directory if zipped root folder
-                string nestedExe = Path.Combine(finalInstallPath, "PRAHARI", "PRAHARI.exe");
-                if (File.Exists(nestedExe))
-                {
-                    string nestedDir = Path.Combine(finalInstallPath, "PRAHARI");
-                    foreach (string item in Directory.GetFileSystemEntries(nestedDir))
-                    {
-                        string dest = Path.Combine(finalInstallPath, Path.GetFileName(item));
-                        if (Directory.Exists(item))
-                        {
-                            if (Directory.Exists(dest)) Directory.Delete(dest, true);
-                            Directory.Move(item, dest);
-                        }
-                        else
-                        {
-                            if (File.Exists(dest)) File.Delete(dest);
-                            File.Move(item, dest);
-                        }
-                    }
-                    Directory.Delete(nestedDir, true);
-                }
-
-                // Step 4: Create Shortcuts
-                SetStatus("Creating shortcuts...", "Registering Desktop and Start Menu entries...", 90);
-                string mainExe = Path.Combine(finalInstallPath, "PRAHARI.exe");
-
-                if (chkDesktopShortcut.Checked)
-                {
-                    string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-                    string shortcutPath = Path.Combine(desktopPath, "PRAHARI.lnk");
-                    CreateShortcut(shortcutPath, mainExe, finalInstallPath, "PRAHARI - Mission HAR Space Experiment Assistant");
-                }
-
-                if (chkStartMenuShortcut.Checked)
-                {
-                    string startMenu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs", APP_NAME);
-                    Directory.CreateDirectory(startMenu);
-                    string shortcutPath = Path.Combine(startMenu, "PRAHARI.lnk");
-                    CreateShortcut(shortcutPath, mainExe, finalInstallPath, "PRAHARI - Mission HAR Space Experiment Assistant");
-                }
-
-                // Clean temporary folder
-                try { Directory.Delete(tempDir, true); } catch { }
-
-                // Step 5: Finished
-                this.BeginInvoke(new Action(() =>
-                {
-                    progressBar.Value = 100;
-                    lblStatus.Text = "Installation Completed Successfully!";
-                    lblStatus.ForeColor = Color.FromArgb(0, 230, 118);
-                    lblDetails.Text = "PRAHARI " + APP_VERSION + " is installed and ready at:\n" + finalInstallPath;
-                    chkLaunch.Visible = true;
-                    btnInstall.Text = "Finish";
-                    btnInstall.Enabled = true;
-                    btnInstall.BackColor = Color.FromArgb(35, 134, 54);
-                }));
-            }
-            catch (Exception ex)
-            {
-                this.BeginInvoke(new Action(() =>
-                {
-                    lblStatus.Text = "Installation Encountered an Error";
-                    lblStatus.ForeColor = Color.FromArgb(248, 81, 73);
-                    lblDetails.Text = ex.Message;
-                    btnInstall.Text = "Close";
-                    btnInstall.Enabled = true;
-                    btnInstall.BackColor = Color.FromArgb(182, 35, 36);
-                }));
-            }
+            InitializeComponent();
         }
 
-        private static string ComputeSha256(string filePath)
+        private void InitializeComponent()
         {
-            using (SHA256 sha = SHA256.Create())
+            this.Text = "PRAHARI Uninstaller";
+            this.Size = new Size(500, 240);
+            this.StartPosition = FormStartPosition.CenterScreen;
+            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
+            this.BackColor = Color.FromArgb(15, 17, 23);
+            this.ForeColor = Color.FromArgb(230, 237, 243);
+            this.Font = new Font("Segoe UI", 9F);
+
+            lblTitle = new Label
             {
-                using (FileStream fs = File.OpenRead(filePath))
-                {
-                    byte[] hash = sha.ComputeHash(fs);
-                    StringBuilder sb = new StringBuilder();
-                    foreach (byte b in hash)
-                    {
-                        sb.Append(b.ToString("x2"));
-                    }
-                    return sb.ToString();
-                }
-            }
+                Text = "Uninstall PRAHARI",
+                Font = new Font("Segoe UI", 12F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(248, 81, 73),
+                Location = new Point(20, 15),
+                AutoSize = true
+            };
+            this.Controls.Add(lblTitle);
+
+            lblMessage = new Label
+            {
+                Text = "Are you sure you want to remove PRAHARI and all its components?\n\nNote: User data, logs, and downloaded models in %LOCALAPPDATA%\\PRAHARI will be preserved.",
+                Location = new Point(22, 50),
+                Size = new Size(440, 60),
+                ForeColor = Color.FromArgb(139, 148, 158)
+            };
+            this.Controls.Add(lblMessage);
+
+            progressBar = new ProgressBar
+            {
+                Location = new Point(24, 115),
+                Size = new Size(436, 18),
+                Visible = false
+            };
+            this.Controls.Add(progressBar);
+
+            lblStatus = new Label
+            {
+                Location = new Point(24, 140),
+                Size = new Size(436, 20),
+                ForeColor = Color.FromArgb(0, 230, 118),
+                Visible = false
+            };
+            this.Controls.Add(lblStatus);
+
+            btnUninstall = new Button
+            {
+                Text = "Uninstall",
+                Location = new Point(280, 155),
+                Size = new Size(95, 28),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(182, 35, 36),
+                ForeColor = Color.White,
+                Cursor = Cursors.Hand
+            };
+            btnUninstall.FlatAppearance.BorderSize = 0;
+            btnUninstall.Click += BtnUninstall_Click;
+            this.Controls.Add(btnUninstall);
+
+            btnCancel = new Button
+            {
+                Text = "Cancel",
+                Location = new Point(385, 155),
+                Size = new Size(75, 28),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(33, 38, 45),
+                ForeColor = Color.White,
+                Cursor = Cursors.Hand
+            };
+            btnCancel.FlatAppearance.BorderColor = Color.FromArgb(48, 54, 61);
+            btnCancel.Click += (s, e) => Application.Exit();
+            this.Controls.Add(btnCancel);
         }
 
-        private static void CreateShortcut(string shortcutPath, string targetPath, string workingDir, string description)
+        private void BtnUninstall_Click(object sender, EventArgs e)
         {
-            try
+            if (btnUninstall.Text == "Close")
             {
-                Type shellType = Type.GetTypeFromProgID("WScript.Shell");
-                dynamic shell = Activator.CreateInstance(shellType);
-                dynamic shortcut = shell.CreateShortcut(shortcutPath);
-                shortcut.TargetPath = targetPath;
-                shortcut.WorkingDirectory = workingDir;
-                shortcut.Description = description;
-                shortcut.Save();
+                Application.Exit();
+                return;
             }
-            catch (Exception)
+
+            btnUninstall.Enabled = false;
+            btnCancel.Enabled = false;
+            progressBar.Visible = true;
+            progressBar.Style = ProgressBarStyle.Marquee;
+            lblStatus.Visible = true;
+            lblStatus.Text = "Removing PRAHARI application files and shortcuts...";
+
+            Thread worker = new Thread(() =>
             {
-                // Fallback using PowerShell if COM is restricted
                 try
                 {
-                    string psCommand = string.Format(
-                        "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('{0}'); $s.TargetPath = '{1}'; $s.WorkingDirectory = '{2}'; $s.Description = '{3}'; $s.Save()",
-                        shortcutPath.Replace("'", "''"),
-                        targetPath.Replace("'", "''"),
-                        workingDir.Replace("'", "''"),
-                        description.Replace("'", "''")
-                    );
-                    ProcessStartInfo psi = new ProcessStartInfo("powershell.exe", "-NoProfile -Command \"" + psCommand + "\"");
-                    psi.CreateNoWindow = true;
-                    psi.UseShellExecute = false;
-                    Process p = Process.Start(psi);
-                    if (p != null) p.WaitForExit();
+                    string installDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
+                    InstallerCore.ExecuteUninstall(installDir);
+
+                    this.BeginInvoke(new Action(() =>
+                    {
+                        progressBar.Visible = false;
+                        lblStatus.Text = "PRAHARI has been uninstalled successfully.";
+                        lblMessage.Text = "Application files and shortcuts have been removed.\nYour models and logs in %LOCALAPPDATA%\\PRAHARI were preserved.";
+                        btnUninstall.Text = "Close";
+                        btnUninstall.Enabled = true;
+                        btnUninstall.BackColor = Color.FromArgb(35, 134, 54);
+                    }));
                 }
-                catch { }
-            }
+                catch (Exception ex)
+                {
+                    this.BeginInvoke(new Action(() =>
+                    {
+                        progressBar.Visible = false;
+                        lblStatus.ForeColor = Color.FromArgb(248, 81, 73);
+                        lblStatus.Text = "Uninstall encountered an error: " + ex.Message;
+                        btnUninstall.Text = "Close";
+                        btnUninstall.Enabled = true;
+                    }));
+                }
+            });
+            worker.IsBackground = true;
+            worker.Start();
         }
     }
 }
