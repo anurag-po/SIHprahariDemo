@@ -81,7 +81,7 @@ PRAHARI features a dedicated **Camera Source Selection Panel** right in the desk
 
 ---
 
-## 🛠 Developer & Source Workflow
+## Developer & Source Workflow
 
 ### 1. Run Automated Tests
 ```powershell
