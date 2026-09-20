@@ -248,6 +248,28 @@ class ObjectTracker:
                         "centroid": centroid,
                     })
 
+                # Check transfer from log to staging
+                if r_name == "staging_zone" and "log_zone" in obj.visited_rois:
+                    emitted_events.append({
+                        "type": f"object_transferred:{label}:log_to_staging",
+                        "object": label,
+                        "roi": "staging_zone",
+                        "confidence": conf,
+                        "timestamp": now,
+                        "centroid": centroid,
+                    })
+
+                # Check transfer from staging to log
+                if r_name == "log_zone" and "staging_zone" in obj.visited_rois:
+                    emitted_events.append({
+                        "type": f"object_transferred:{label}:staging_to_log",
+                        "object": label,
+                        "roi": "log_zone",
+                        "confidence": conf,
+                        "timestamp": now,
+                        "centroid": centroid,
+                    })
+
                 # 2. object_stationary_in_roi
                 if obj.state == "stationary" and obj.frames_stationary >= 3:
                     stat_event_key = f"object_stationary_in_roi:{label}:{r_name}"

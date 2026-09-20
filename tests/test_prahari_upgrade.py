@@ -34,14 +34,14 @@ def test_config_schema():
     with open(config_path, "r", encoding="utf-8") as f:
         cfg = json.load(f)
 
-    assert "steps" in cfg and len(cfg["steps"]) == 7
+    assert "steps" in cfg and len(cfg["steps"]) == 6
     assert "rois" in cfg and "log_zone" in cfg["rois"]
 
     # Verify additive fields
-    step_5 = next(s for s in cfg["steps"] if s["id"] == 5)
-    assert step_5["severity"] == 0.95
-    assert step_5["irreversible"] is True
-    assert "storage_zone" in step_5["expected_targets"]
+    step_6 = next(s for s in cfg["steps"] if s["id"] == 6)
+    assert step_6["severity"] == 0.95
+    assert step_6["irreversible"] is True
+    assert "storage_zone" in step_6["expected_targets"]
     print("  -> PASSED: Config schema contains all Addendum fields.")
 
 
@@ -51,7 +51,7 @@ def test_confidence_gating_and_explainable_alerts():
         cfg = json.load(f)
 
     logger = SessionLogger("test_exp", logs_dir="logs/test")
-    scorer = ProcedureScorer(total_steps=7)
+    scorer = ProcedureScorer(total_steps=6)
     validator = ExperimentValidator(
         experiment_config=cfg,
         session_logger=logger,
@@ -142,14 +142,14 @@ def test_predictive_risk_engine():
 def test_procedure_scorer():
     print("[TEST] 4. Testing Procedure-Quality Scorer...")
     scorer = ProcedureScorer(
-        total_steps=7,
+        total_steps=6,
         expected_duration_seconds=60.0,
         weight_accuracy=0.5,
         weight_speed=0.2,
         weight_cleanliness=0.3,
     )
-    # Simulate 7 completed OK steps, 1 deviation, 1 predictive warning
-    for s_id in range(1, 8):
+    # Simulate 6 completed OK steps, 1 deviation, 1 predictive warning
+    for s_id in range(1, 7):
         scorer.on_step_ok(s_id)
     scorer.on_deviation(5)
     scorer.on_predictive_warning(5)
