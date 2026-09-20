@@ -6,7 +6,7 @@ PRAHARI is an offline, edge-running computer vision desktop application designed
 
 ---
 
-## ⚡ How to Run the Project Using Git Clone (Quickstart)
+## How to Run the Project Using Git Clone (Quickstart)
 
 Follow these simple steps to clone, set up, and run PRAHARI directly from source:
 
@@ -69,9 +69,9 @@ PRAHARI features a dedicated **Camera Source Selection Panel** right in the desk
 
 | Camera Mode | Button | Description |
 | :--- | :--- | :--- |
-| **Local USB Webcam** | `📹 Web Camera` | Connects instantly to your built-in webcam or external USB camera (device index 0, 1, ...). |
-| **Network IP Camera** | `🌐 IP Camera` | Connects to an RTSP, HTTP MJPEG, or snapshot stream (e.g. `http://192.168.1.50:8080/video` or `rtsp://...`). |
-| **Mobile Phone Bridge** | `📱 Mobile Phone Bridge` | Starts an in-process zero-install web server on port 8000. Open the displayed URL (`http://<LAN-IP>:8000`) on your phone's Chrome browser to stream live video directly to PRAHARI. |
+| **Local USB Webcam** | ` Web Camera` | Connects instantly to your built-in webcam or external USB camera (device index 0, 1, ...). |
+| **Network IP Camera** | ` IP Camera` | Connects to an RTSP, HTTP MJPEG, or snapshot stream (e.g. `http://192.168.1.50:8080/video` or `rtsp://...`). |
+| **Mobile Phone Bridge** | ` Mobile Phone Bridge` | Starts an in-process zero-install web server on port 8000. Open the displayed URL (`http://<LAN-IP>:8000`) on your phone's Chrome browser to stream live video directly to PRAHARI. |
 
 ### Stream Controls:
 - **Flip Camera (Mirror)**: Horizontally flip camera video.
@@ -104,7 +104,7 @@ python tests/test_packaging.py
 
 ---
 
-## 📁 Repository Structure
+##  Repository Structure
 
 ```text
 SIHprahariDemo/
@@ -151,7 +151,7 @@ SIHprahariDemo/
 
 ---
 
-## 🔒 Security & Data Paths
+##  Security & Data Paths
 
 When running the application:
 - **Application Binaries & Assets**: Loaded from installation/project root (`models/`, `config/`).
