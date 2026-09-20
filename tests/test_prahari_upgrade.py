@@ -38,11 +38,10 @@ def test_config_schema():
     assert "rois" in cfg and "log_zone" in cfg["rois"]
 
     # Verify additive fields
-    cap_step = next(s for s in cfg["steps"] if s["id"] == 5)
-    assert cap_step["severity"] == 0.95
-    assert cap_step["irreversible"] is True
-    assert "staging_zone" in cap_step["expected_targets"]
-    assert "storage_zone" in cap_step["confusable_targets"]
+    step_5 = next(s for s in cfg["steps"] if s["id"] == 5)
+    assert step_5["severity"] == 0.95
+    assert step_5["irreversible"] is True
+    assert "storage_zone" in step_5["expected_targets"]
     print("  -> PASSED: Config schema contains all Addendum fields.")
 
 

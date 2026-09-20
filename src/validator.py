@@ -89,7 +89,8 @@ class ExperimentValidator:
         return None
 
     def _match_event_to_step(self, event_type: str) -> Optional[Dict[str, Any]]:
-        """Finds step definition matching the emitted event string."""
+        """Finds step definition matching the emitted event string, prioritizing uncompleted steps."""
+        candidate = None
         for step in self.steps:
             target_event = step.get("event")
             if not target_event:
@@ -97,8 +98,11 @@ class ExperimentValidator:
             allowed_events = [e.strip() for e in target_event.split("|")] if "|" in target_event else [target_event]
             for allowed in allowed_events:
                 if event_type == allowed or (allowed.startswith("dwell") and event_type.startswith("dwell")):
-                    return step
-        return None
+                    if step["id"] not in self.completed_step_ids:
+                        return step
+                    if candidate is None:
+                        candidate = step
+        return candidate
 
     def handle_predicted_deviation(self, event_data: Dict[str, Any]):
         """

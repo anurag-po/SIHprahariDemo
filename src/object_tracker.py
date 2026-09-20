@@ -23,6 +23,7 @@ class ObjectMicroFSM:
         self.frames_stationary = 0
         self.frames_in_hand = 0
         self.current_rois: List[str] = []
+        self.visited_rois: set = set()
         self.last_seen_time = 0.0
         self.dwell_start_time: Optional[float] = None
         self.dwell_emitted: bool = False
@@ -156,6 +157,8 @@ class ObjectTracker:
                 if self.point_in_box(centroid, r_box) or self.box_overlap_ratio(bbox, r_box) > 0.12:
                     rois_inside.append(r_name)
             obj.current_rois = rois_inside
+            for r in rois_inside:
+                obj.visited_rois.add(r)
 
             # Check if in hand (distance to any hand centroid or box overlap)
             is_in_hand = False
@@ -222,6 +225,17 @@ class ObjectTracker:
                     "timestamp": now,
                     "centroid": centroid,
                 })
+
+                # Check transfer from staging to storage
+                if r_name == "storage_zone" and "staging_zone" in obj.visited_rois:
+                    emitted_events.append({
+                        "type": f"object_transferred:{label}:staging_to_storage",
+                        "object": label,
+                        "roi": "storage_zone",
+                        "confidence": conf,
+                        "timestamp": now,
+                        "centroid": centroid,
+                    })
 
                 # 2. object_stationary_in_roi
                 if obj.state == "stationary" and obj.frames_stationary >= 3:
